@@ -1,0 +1,223 @@
+services:
+  # ============================================
+  # PRIMARY POSTGRES DATABASE
+  # ============================================
+  postgres-primary:
+    image: pgvector/pgvector:pg16
+    container_name: exam_postgres_primary
+    restart: unless-stopped
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    command: |
+      postgres 
+      -c wal_level=replica
+      -c max_wal_senders=10
+      -c max_replication_slots=5
+      -c hot_standby=on
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+    networks:
+      - exam_network
+
+  # ============================================
+  # POSTGRES REPLICA
+  # ============================================
+  postgres-replica:
+    image: pgvector/pgvector:pg16
+    container_name: exam_postgres_replica
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+      PG_REPLICATE_FROM: postgres-primary
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    depends_on:
+      postgres-primary:
+        condition: service_started
+    command: |
+      postgres 
+      -c wal_level=replica
+      -c hot_standby=on
+      -c max_connections=200
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE} -h localhost -p 5432" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - exam_network
+
+  # ============================================
+  # PGBOUNCER - Connection Pooling
+  # ============================================
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: exam_pgbouncer
+    restart: unless-stopped
+    ports:
+      - "6432:6432"
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: postgres-primary
+      DB_PORT: 5432
+      DB_NAME: ${DB_DATABASE}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 200
+      LISTEN_PORT: 6432
+    depends_on:
+      postgres-primary:
+        condition: service_started
+    networks:
+      - exam_network
+
+  # ============================================
+  # REDIS - Cache & Queue
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: exam_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: |
+      redis-server 
+      --appendonly yes 
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - exam_network
+
+  # ============================================
+  # MINIO - S3 Compatible Storage
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: exam_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - exam_network
+
+  # ============================================
+  # SUPABASE AUTH (Optional / Unused)
+  # ============================================
+  supabase-auth:
+    image: supabase/gotrue:v2.126.0
+    container_name: exam_auth
+    restart: unless-stopped
+    ports:
+      - "9999:9999"
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${NEXTAUTH_URL}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_DATABASE}?options=-csearch_path=auth,public
+      GOTRUE_SITE_URL: ${NEXTAUTH_URL}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: true
+      GOTRUE_MAILER_AUTOCONFIRM: true
+    depends_on:
+      postgres-primary:
+        condition: service_started
+      pgbouncer:
+        condition: service_started
+    networks:
+      - exam_network
+
+  # ============================================
+  # NEXT.JS WEB APP
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: exam_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER}:${DB_PASSWORD}@postgres-primary:5432/${DB_DATABASE}}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      postgres-primary:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - exam_network
+
+  # ============================================
+  # NGINX - Reverse Proxy
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: exam_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+    networks:
+      - exam_network
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  postgres_primary_data:
+  postgres_replica_data:
+  redis_data:
+  minio_data:
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  exam_network:
+    driver: bridge

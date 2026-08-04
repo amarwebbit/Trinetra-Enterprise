@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules
+/.pnpm
+/.yarn
+
+# Next.js Build Outputs
+/.next/
+/out/
+/build
+
+# Environment Variables & Secrets
+.env
+.env*.local
+.env.production
+.env.staging
+/ssl/
+
+# Debug Logs & OS Files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+*.pem
+*.key
+*.log
+/logs/
+
+# TypeScript Cache
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE / Gemini Scratch & Tasks
+/.gemini/
+/scratch/

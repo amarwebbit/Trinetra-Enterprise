@@ -1,0 +1,2 @@
+// Seed tenant script
+export {};

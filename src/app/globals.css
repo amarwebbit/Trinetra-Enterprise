@@ -1,0 +1,85 @@
+@import 'katex/dist/katex.min.css';
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+@import '../styles/responsive.css';
+
+@layer base {
+  :root {
+    --background: 177 31% 96%; /* Very Light Pale Teal/Blue #D0E7E6 tint */
+    --foreground: 231 49% 15%; /* Dark Blue #293681 text */
+
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 231 49% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 231 49% 15%;
+
+    /* Main brand colors */
+    --primary: 231 49% 33%; /* Dark Blue #293681 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 68% 55%; /* Royal Blue #4274D9 */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 177 31% 86%; /* Very Light Pale Teal/Blue #D0E7E6 */
+    --muted-foreground: 231 15% 40%;
+
+    --accent: 194 48% 73%; /* Soft Light Blue #95CCDD */
+    --accent-foreground: 231 49% 15%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 177 31% 86%; /* #D0E7E6 */
+    --input: 177 31% 86%;
+    --ring: 231 49% 33%;
+
+    --radius: 0px; /* Rectangular design as requested */
+  }
+
+  .dark {
+    --background: 231 49% 8%; /* Deepest Navy background #0A0D1F */
+    --foreground: 177 31% 95%; /* Ice blue light text */
+
+    --card: 231 49% 12%; /* Deep navy cards #0F142D */
+    --card-foreground: 177 31% 95%;
+
+    --popover: 231 49% 12%;
+    --popover-foreground: 177 31% 95%;
+
+    --primary: 220 68% 55%; /* Royal Blue #4274D9 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 194 48% 73%; /* Soft Light Blue #95CCDD */
+    --secondary-foreground: 231 49% 15%;
+
+    --muted: 231 49% 20%; /* Darker navy blue border #1A224D */
+    --muted-foreground: 220 15% 70%;
+
+    --accent: 194 48% 73%; /* Soft Light Blue #95CCDD */
+    --accent-foreground: 231 49% 15%;
+
+    --destructive: 0 62% 38%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 231 49% 20%; /* #1A224D */
+    --input: 231 49% 20%;
+    --ring: 220 68% 55%;
+
+    --radius: 0px;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

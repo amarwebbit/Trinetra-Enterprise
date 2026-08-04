@@ -1,0 +1,2 @@
+-- 04_indexes.sql
+-- Create database indexes here

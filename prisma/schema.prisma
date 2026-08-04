@@ -1,0 +1,774 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ai_analysis {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id          String    @db.Uuid
+  exam_id            String?   @db.Uuid
+  student_id         String?   @db.Uuid
+  analysis_type      String    @db.VarChar(50)
+  input_data         Json
+  output_data        Json
+  confidence_score   Decimal?  @db.Decimal(5, 2)
+  model_used         String?   @db.VarChar(100)
+  processing_time_ms Int?
+  tokens_used        Int?
+  cost_usd           Decimal?  @db.Decimal(10, 6)
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+  exams              exams?    @relation(fields: [exam_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users              users?    @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants            tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model answers {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id        String        @db.Uuid
+  attempt_id       String        @db.Uuid
+  question_id      String        @db.Uuid
+  answer_text      String?
+  answer_file_url  String?
+  code_submission  String?
+  marks_awarded    Decimal?      @db.Decimal(5, 2)
+  is_correct       Boolean?
+  ai_confidence    Decimal?      @db.Decimal(5, 2)
+  ai_feedback      String?
+  teacher_feedback String?
+  grading_status   String?       @default("pending") @db.VarChar(50)
+  metadata         Json?         @default("{}")
+  created_at       DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?     @default(now()) @db.Timestamptz(6)
+  exam_attempts    exam_attempts @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  questions        questions     @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants          tenants       @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([attempt_id], map: "idx_answers_attempt")
+  @@index([question_id])
+  @@index([tenant_id])
+  @@index([grading_status])
+  @@index([is_correct])
+  @@index([attempt_id, grading_status])
+  @@index([question_id, is_correct])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model api_keys {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id             String    @db.Uuid
+  name                  String    @db.VarChar(255)
+  key_hash              String    @unique
+  key_preview           String?   @db.VarChar(20)
+  permissions           Json?     @default("{\"read\": true, \"write\": false}")
+  rate_limit_per_minute Int?      @default(60)
+  expires_at            DateTime? @db.Timestamptz(6)
+  last_used_at          DateTime? @db.Timestamptz(6)
+  is_active             Boolean?  @default(true)
+  created_at            DateTime? @default(now()) @db.Timestamptz(6)
+  tenants               tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model audit_logs {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String    @db.Uuid
+  user_id       String?   @db.Uuid
+  action        String    @db.VarChar(255)
+  resource_type String    @db.VarChar(100)
+  resource_id   String?   @db.Uuid
+  old_values    Json?
+  new_values    Json?
+  ip_address    String?
+  user_agent    String?
+  metadata      Json?     @default("{}")
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  tenants       tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users         users?    @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([created_at], map: "idx_audit_logs_created")
+  @@index([tenant_id], map: "idx_audit_logs_tenant")
+  @@index([user_id])
+  @@index([action])
+  @@index([resource_type])
+  @@index([tenant_id, created_at])
+  @@index([user_id, action])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model co_attainment {
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id             String          @db.Uuid
+  exam_id               String          @db.Uuid
+  co_id                 String          @db.Uuid
+  attainment_percentage Decimal?        @db.Decimal(5, 2)
+  target_percentage     Decimal?        @db.Decimal(5, 2)
+  student_count         Int?
+  metadata              Json?           @default("{}")
+  created_at            DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?       @default(now()) @db.Timestamptz(6)
+  course_outcomes       course_outcomes @relation(fields: [co_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  exams                 exams           @relation(fields: [exam_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants               tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model compliance_reports {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String    @db.Uuid
+  report_type    String    @db.VarChar(50)
+  title          String    @db.VarChar(255)
+  file_url       String?
+  generated_at   DateTime? @default(now()) @db.Timestamptz(6)
+  parameters     Json?     @default("{}")
+  status         String?   @default("generating") @db.VarChar(50)
+  download_count Int?      @default(0)
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  tenants        tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model course_outcomes {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String          @db.Uuid
+  course_id     String          @db.Uuid
+  code          String          @db.VarChar(20)
+  description   String
+  bloom_level   String?         @db.VarChar(50)
+  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  co_attainment co_attainment[]
+  courses       courses         @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants       tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model courses {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id       String            @db.Uuid
+  department_id   String?           @db.Uuid
+  name            String            @db.VarChar(255)
+  code            String?           @unique @db.VarChar(50)
+  year            Int?
+  semester        Int?
+  description     String?
+  credits         Int?              @default(3)
+  is_active       Boolean?          @default(true)
+  created_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  course_outcomes course_outcomes[]
+  departments     departments?      @relation(fields: [department_id], references: [id], onUpdate: NoAction)
+  tenants         tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  enrollments     enrollments[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model departments {
+  id                                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                              String    @db.Uuid
+  name                                   String    @db.VarChar(255)
+  code                                   String?   @db.VarChar(50)
+  description                            String?
+  head_id                                String?   @db.Uuid
+  is_active                              Boolean?  @default(true)
+  created_at                             DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                             DateTime? @default(now()) @db.Timestamptz(6)
+  courses                                courses[]
+  users_departments_head_idTousers       users?    @relation("departments_head_idTousers", fields: [head_id], references: [id], onUpdate: NoAction)
+  tenants                                tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_users_department_idTodepartments users[]   @relation("users_department_idTodepartments")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model enrollments {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id       String    @db.Uuid
+  student_id      String    @db.Uuid
+  course_id       String    @db.Uuid
+  enrollment_date DateTime? @default(now()) @db.Timestamptz(6)
+  is_active       Boolean?  @default(true)
+  metadata        Json?     @default("{}")
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
+  courses         courses   @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants         tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([student_id, course_id])
+  @@index([student_id])
+  @@index([course_id])
+  @@index([tenant_id])
+  @@index([is_active])
+  @@index([student_id, course_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model exam_attempts {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id           String            @db.Uuid
+  student_id          String            @db.Uuid
+  exam_id             String            @db.Uuid
+  start_time          DateTime?         @default(now()) @db.Timestamptz(6)
+  end_time            DateTime?         @db.Timestamptz(6)
+  score               Decimal?          @db.Decimal(8, 2)
+  total_marks         Decimal?          @db.Decimal(8, 2)
+  percentage          Decimal?          @db.Decimal(5, 2)
+  status              String?           @default("in_progress") @db.VarChar(50)
+  ip_address          String?
+  browser_info        String?
+  device_info         String?
+  metadata            Json?             @default("{}")
+  created_at          DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?         @default(now()) @db.Timestamptz(6)
+  answers             answers[]
+  exams               exams             @relation(fields: [exam_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users               users             @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants             tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  proctoring_logs     proctoring_logs[]
+  attempt_number      Int?              @default(1)
+  is_best_attempt     Boolean?          @default(false)
+  previous_attempt_id String?           @unique @db.Uuid
+  previous_attempt    exam_attempts?    @relation("AttemptHistory", fields: [previous_attempt_id], references: [id])
+  next_attempt        exam_attempts?    @relation("AttemptHistory")
+
+  @@unique([student_id, exam_id, attempt_number])
+  @@index([exam_id], map: "idx_exam_attempts_exam")
+  @@index([student_id], map: "idx_exam_attempts_student")
+  @@index([status])
+  @@index([tenant_id])
+  @@index([start_time])
+  @@index([created_at])
+  @@index([attempt_number])
+  @@index([is_best_attempt])
+  @@index([score])
+  @@index([percentage])
+  @@index([exam_id, status, created_at])
+  @@index([student_id, status, created_at])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model exam_questions {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id       String        @db.Uuid
+  exam_section_id String        @db.Uuid
+  question_id     String        @db.Uuid
+  order_index     Int?
+  marks           Decimal?      @db.Decimal(5, 2)
+  created_at      DateTime?     @default(now()) @db.Timestamptz(6)
+  exam_sections   exam_sections @relation(fields: [exam_section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  questions       questions     @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants         tenants       @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([exam_section_id, question_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model exam_sections {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id          String           @db.Uuid
+  exam_id            String           @db.Uuid
+  name               String           @db.VarChar(255)
+  order_index        Int
+  question_count     Int?
+  marks_per_question Decimal?         @db.Decimal(5, 2)
+  negative_marks     Decimal?         @default(0.0) @db.Decimal(5, 2)
+  section_time_limit Int?
+  shuffle_questions  Boolean?         @default(false)
+  instructions       String?          @db.Text
+  instructions_html  String?          @db.Text
+  created_at         DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?        @default(now()) @db.Timestamptz(6)
+  exam_questions     exam_questions[]
+  exams              exams            @relation(fields: [exam_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants            tenants          @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model exams {
+  id                       String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                String            @db.Uuid
+  teacher_id               String?           @db.Uuid
+  title                    String            @db.VarChar(255)
+  description              String?
+  exam_type                String?           @default("general") @db.VarChar(100)
+  pattern                  String?           @default("custom") @db.VarChar(100)
+  duration_minutes         Int
+  total_marks              Decimal?          @db.Decimal(8, 2)
+  passing_percentage       Decimal?          @default(40.0) @db.Decimal(5, 2)
+  start_time               DateTime          @db.Timestamptz(6)
+  end_time                 DateTime          @db.Timestamptz(6)
+  shuffle_questions        Boolean?          @default(false)
+  shuffle_options          Boolean?          @default(false)
+  allow_back_navigation    Boolean?          @default(true)
+  show_results_immediately Boolean?          @default(false)
+  require_webcam           Boolean?          @default(false)
+  ip_restriction           String[]
+  full_screen_required     Boolean?          @default(false)
+  disable_copy_paste       Boolean?          @default(false)
+  is_published             Boolean?          @default(false)
+  is_active                Boolean?          @default(true)
+  attempt_count            Int?              @default(1)
+  max_attempts             Int?              @default(1)
+  allow_multiple           Boolean?          @default(false)
+  instructions             String?           @db.Text
+  instructions_html        String?           @db.Text
+  show_instructions        Boolean?          @default(true)
+  require_acknowledgement  Boolean?          @default(true)
+  metadata                 Json?             @default("{}")
+  created_at               DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime?         @default(now()) @db.Timestamptz(6)
+  ai_analysis              ai_analysis[]
+  co_attainment            co_attainment[]
+  exam_attempts            exam_attempts[]
+  exam_sections            exam_sections[]
+  invite_token             String?           @unique @map("invite_token") @db.VarChar(64)
+  invite_expires_at        DateTime?         @map("invite_expires_at") @db.Timestamptz(6)
+  invite_max_uses          Int?              @default(0) @map("invite_max_uses")
+  invite_used_count        Int?              @default(0) @map("invite_used_count")
+  invite_tokens            ExamInviteToken[]
+  users                    users?            @relation(fields: [teacher_id], references: [id], onUpdate: NoAction)
+  tenants                  tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([start_time, end_time], map: "idx_exams_start_end")
+  @@index([tenant_id], map: "idx_exams_tenant_id")
+  @@index([teacher_id])
+  @@index([start_time])
+  @@index([end_time])
+  @@index([is_active])
+  @@index([is_published])
+  @@index([created_at])
+  @@index([exam_type])
+  @@index([tenant_id, is_active, start_time])
+  @@index([teacher_id, is_active, created_at])
+  @@index([tenant_id, exam_type, is_active])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model modules {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String           @unique @db.VarChar(50)
+  name           String           @db.VarChar(255)
+  description    String?
+  price          Decimal?         @db.Decimal(10, 2)
+  depends_on     String[]         @default([])
+  is_core        Boolean?         @default(false)
+  is_active      Boolean?         @default(true)
+  sub_modules    Json?            @default("[]")
+  features       Json?            @default("[]")
+  created_at     DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?        @default(now()) @db.Timestamptz(6)
+  tenant_modules tenant_modules[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model notifications {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String    @db.Uuid
+  user_id       String?   @db.Uuid
+  type          String?   @db.VarChar(50)
+  title         String?   @db.VarChar(255)
+  content       String
+  channel       String?   @db.VarChar(50)
+  is_read       Boolean?  @default(false)
+  is_sent       Boolean?  @default(false)
+  sent_at       DateTime? @db.Timestamptz(6)
+  error_message String?
+  metadata      Json?     @default("{}")
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  tenants       tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users         users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model proctoring_logs {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String        @db.Uuid
+  attempt_id     String        @db.Uuid
+  event_type     String        @db.VarChar(100)
+  event_data     Json
+  severity       String?       @db.VarChar(20)
+  screenshot_url String?
+  video_url      String?
+  created_at     DateTime?     @default(now()) @db.Timestamptz(6)
+  exam_attempts  exam_attempts @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants        tenants       @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([attempt_id])
+  @@index([tenant_id])
+  @@index([created_at])
+  @@index([event_type])
+  @@index([severity])
+  @@index([attempt_id, severity])
+  @@index([tenant_id, created_at])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model question_banks {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String      @db.Uuid
+  teacher_id     String?     @db.Uuid
+  name           String      @db.VarChar(255)
+  subject        String?     @db.VarChar(255)
+  description    String?
+  is_shared      Boolean?    @default(false)
+  is_published   Boolean?    @default(false)
+  question_count Int?        @default(0)
+  created_at     DateTime?   @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?   @default(now()) @db.Timestamptz(6)
+  users          users?      @relation(fields: [teacher_id], references: [id], onUpdate: NoAction)
+  tenants        tenants     @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  questions      questions[]
+
+  @@index([tenant_id])
+  @@index([teacher_id])
+  @@index([is_shared])
+  @@index([is_published])
+  @@index([tenant_id, is_published])
+  @@index([teacher_id, is_shared])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model questions {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String                 @db.Uuid
+  bank_id        String?                @db.Uuid
+  type           String                 @db.VarChar(50)
+  question_text  String
+  options        Json?
+  correct_answer String?
+  marks          Decimal?               @default(1.0) @db.Decimal(5, 2)
+  negative_marks Decimal?               @default(0.0) @db.Decimal(5, 2)
+  difficulty     String?                @db.VarChar(20)
+  bloom_taxonomy String?                @db.VarChar(50)
+  co_tag         String?                @db.VarChar(50)
+  topic          String?                @db.VarChar(255)
+  topic_id       String?                @db.Uuid
+  explanation    String?
+  embedding      Unsupported("vector")?
+  metadata       Json?                  @default("{}")
+  is_active      Boolean?               @default(true)
+  usage_count    Int?                   @default(0)
+  created_at     DateTime?              @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?              @default(now()) @db.Timestamptz(6)
+  answers        answers[]
+  exam_questions exam_questions[]
+  question_banks question_banks?        @relation(fields: [bank_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants        tenants                @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  topics         topics?                @relation(fields: [topic_id], references: [id], onUpdate: NoAction)
+
+  @@index([bank_id], map: "idx_questions_bank")
+  @@index([topic], map: "idx_questions_topic")
+  @@index([tenant_id])
+  @@index([difficulty])
+  @@index([type])
+  @@index([created_at])
+  @@index([is_active])
+  @@index([bank_id, type, difficulty])
+  @@index([tenant_id, topic, difficulty])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model tenant_modules {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String    @db.Uuid
+  module_id     String    @db.Uuid
+  is_enabled    Boolean?  @default(false)
+  custom_limits Json?     @default("{}")
+  usage_count   Json?     @default("{}")
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
+  modules       modules   @relation(fields: [module_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants       tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenant_id, module_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model tenants {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String  @db.VarChar(255)
+  slug            String  @unique @db.VarChar(100)
+  domain          String? @unique @db.VarChar(255)
+  logo_url        String?
+  favicon_url     String?
+  banner_url      String?
+  primary_color   String? @default("#2563EB") @db.VarChar(7)
+  secondary_color String? @default("#7C3AED") @db.VarChar(7)
+  accent_color    String?
+  font_family     String? @default("Inter") @db.VarChar(100)
+  custom_css      String? @db.Text
+
+  // ✅ Advanced White-label
+  login_background String?
+  header_bg_color  String?
+  footer_text      String?
+  remove_branding  Boolean @default(false)
+  custom_domain    String?
+
+  // ✅ Mobile App Branding
+  app_logo_url          String?
+  app_primary_color     String?
+  app_splash_screen     String?
+  email_template        String?
+  sms_template          String?
+  modules_enabled       String[]             @default(["core"])
+  module_settings       Json?                @default("{}")
+  overage_limits        Json?                @default("{\"ai_questions\": 500, \"ai_evaluations\": 1000}")
+  usage_metrics         Json?                @default("{\"ai_questions_used\": 0, \"ai_evaluations_used\": 0}")
+  is_active             Boolean?             @default(true)
+  subscription_plan     String?              @default("basic") @db.VarChar(50)
+  subscription_end_date DateTime?            @db.Timestamp(6)
+  created_at            DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?            @default(now()) @db.Timestamptz(6)
+  ai_analysis           ai_analysis[]
+  answers               answers[]
+  api_keys              api_keys[]
+  audit_logs            audit_logs[]
+  co_attainment         co_attainment[]
+  compliance_reports    compliance_reports[]
+  course_outcomes       course_outcomes[]
+  courses               courses[]
+  departments           departments[]
+  enrollments           enrollments[]
+  exam_attempts         exam_attempts[]
+  exam_questions        exam_questions[]
+  exam_sections         exam_sections[]
+  exams                 exams[]
+  notifications         notifications[]
+  proctoring_logs       proctoring_logs[]
+  question_banks        question_banks[]
+  questions             questions[]
+  tenant_modules        tenant_modules[]
+  users                 users[]
+  webhooks              webhooks[]
+  assignments           assignments[]
+  topics                topics[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model users {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String  @db.Uuid
+  email         String  @db.VarChar(255)
+  password_hash String
+  full_name     String? @db.VarChar(255)
+  role          String  @db.VarChar(50)
+  phone         String? @db.VarChar(20)
+  avatar_url    String?
+  roll_number   String? @unique
+
+  is_active                                    Boolean?          @default(true)
+  email_verified                               Boolean?          @default(false)
+  phone_verified                               Boolean?          @default(false)
+  last_login                                   DateTime?         @db.Timestamptz(6)
+  metadata                                     Json?             @default("{}")
+  refresh_token                                String?
+  created_at                                   DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at                                   DateTime?         @default(now()) @db.Timestamptz(6)
+  department_id                                String?           @db.Uuid
+  ai_analysis                                  ai_analysis[]
+  audit_logs                                   audit_logs[]
+  departments_departments_head_idTousers       departments[]     @relation("departments_head_idTousers")
+  enrollments                                  enrollments[]
+  exam_attempts                                exam_attempts[]
+  exams                                        exams[]
+  notifications                                notifications[]
+  question_banks                               question_banks[]
+  accounts                                     accounts[]
+  sessions                                     sessions[]
+  departments_users_department_idTodepartments departments?      @relation("users_department_idTodepartments", fields: [department_id], references: [id], onUpdate: NoAction)
+  tenants                                      tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  assignments                                  assignments[]
+  exam_invite_tokens                           ExamInviteToken[]
+  exam_invite_usage                            ExamInviteUsage[]
+  topics                                       topics[]
+
+  @@unique([tenant_id, email])
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
+  @@index([tenant_id], map: "idx_users_tenant_id")
+  @@index([is_active])
+  @@index([created_at])
+  @@index([tenant_id, role, is_active])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model webhook_deliveries {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webhook_id      String    @db.Uuid
+  event_type      String    @db.VarChar(100)
+  payload         Json
+  response_status Int?
+  response_body   String?
+  attempt_count   Int?      @default(0)
+  success         Boolean?  @default(false)
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+  webhooks        webhooks  @relation(fields: [webhook_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model webhooks {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id          String               @db.Uuid
+  name               String               @db.VarChar(255)
+  url                String
+  events             String[]
+  secret             String?
+  is_active          Boolean?             @default(true)
+  retry_count        Int?                 @default(3)
+  timeout_ms         Int?                 @default(5000)
+  created_at         DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?            @default(now()) @db.Timestamptz(6)
+  webhook_deliveries webhook_deliveries[]
+  tenants            tenants              @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model schema_migrations {
+  version String @id @unique(map: "schema_migrations_version_idx") @db.VarChar(14)
+}
+
+enum aal_level {
+  aal1
+  aal2
+  aal3
+}
+
+enum code_challenge_method {
+  s256
+  plain
+}
+
+enum factor_status {
+  unverified
+  verified
+}
+
+enum factor_type {
+  totp
+  webauthn
+}
+
+model accounts {
+  id                String  @id @default(cuid())
+  userId            String  @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              users   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model sessions {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+  user         users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model verification_tokens {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model assignments {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id    String   @db.Uuid
+  teacher_id   String   @db.Uuid
+  title        String   @db.VarChar(255)
+  description  String?
+  branch       String   @db.VarChar(50)
+  passing_year Int
+  content      String?
+  content_type String   @db.VarChar(50)
+  is_published Boolean  @default(false)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  teacher users   @relation(fields: [teacher_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant  tenants @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model ExamInviteToken {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId    String            @map("exam_id") @db.Uuid
+  exam      exams             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  token     String            @unique @db.VarChar(64)
+  maxUses   Int               @default(0) @map("max_uses")
+  usedCount Int               @default(0) @map("used_count")
+  expiresAt DateTime?         @map("expires_at") @db.Timestamptz(6)
+  isActive  Boolean           @default(true) @map("is_active")
+  createdBy String?           @map("created_by") @db.Uuid
+  creator   users?            @relation(fields: [createdBy], references: [id])
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  usage     ExamInviteUsage[]
+
+  @@map("exam_invite_tokens")
+}
+
+model ExamInviteUsage {
+  id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenId    String          @map("token_id") @db.Uuid
+  token      ExamInviteToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  studentId  String          @map("student_id") @db.Uuid
+  student    users           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  accessedAt DateTime        @default(now()) @map("accessed_at") @db.Timestamptz(6)
+  ipAddress  String?         @map("ip_address")
+  userAgent  String?         @map("user_agent")
+
+  @@unique([tokenId, studentId])
+  @@map("exam_invite_usage")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model topics {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String    @db.Uuid
+  name           String    @db.VarChar(255)
+  description    String?
+  color          String?   @default("#3B82F6") @db.VarChar(7)
+  question_count Int?      @default(0)
+  created_by     String?   @db.Uuid
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime? @default(now()) @db.Timestamptz(6)
+
+  users     users?      @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  tenants   tenants     @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  questions questions[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id], map: "idx_topics_tenant")
+  @@index([name])
+  @@index([created_at])
+  @@index([tenant_id, name])
+}

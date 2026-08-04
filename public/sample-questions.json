@@ -1,0 +1,59 @@
+{
+  "questions": [
+    {
+      "type": "mcq_single",
+      "question_text": "What is the value of $$ \\int_0^\\infty e^{-x^2} dx $$ ?",
+      "options": {
+        "A": "$$ \\frac{\\sqrt{\\pi}}{2} $$",
+        "B": "$$ \\sqrt{\\pi} $$",
+        "C": "$$ \\frac{\\pi}{2} $$",
+        "D": "1"
+      },
+      "correct_answer": "A",
+      "marks": 2,
+      "negative_marks": 0.5,
+      "difficulty": "hard",
+      "topic": "Calculus"
+    },
+    {
+      "type": "mcq_single",
+      "question_text": "Identify the biological cell structure shown in the diagram below: <br/><img src=\"https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400\" alt=\"Cell Diagram\" class=\"max-h-64 my-2 border rounded border-gray-300\"/>",
+      "options": {
+        "A": "Mitochondria",
+        "B": "Plant Cell Wall",
+        "C": "Cell Membrane",
+        "D": "Ribosome"
+      },
+      "correct_answer": "A",
+      "marks": 2,
+      "negative_marks": 0.5,
+      "difficulty": "medium",
+      "topic": "Biology"
+    },
+    {
+      "type": "mcq_multiple",
+      "question_text": "Which of the following are prime numbers?",
+      "options": {
+        "A": "2",
+        "B": "4",
+        "C": "7",
+        "D": "9"
+      },
+      "correct_answer": ["A", "C"],
+      "marks": 2,
+      "negative_marks": 0.5,
+      "difficulty": "easy",
+      "topic": "Number Theory"
+    },
+    {
+      "type": "nat",
+      "question_text": "What is the value of $$ \\sin(\\pi/2) $$ ?",
+      "correct_answer": 1,
+      "tolerance": 0.01,
+      "marks": 1,
+      "negative_marks": 0,
+      "difficulty": "easy",
+      "topic": "Trigonometry"
+    }
+  ]
+}
