@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Exam is not available for submission' }, { status: 403 });
   }
 
-  if (['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'].includes(attempt.status)) {
+  if (attempt.status && ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'].includes(attempt.status)) {
     return NextResponse.json({ success: true, message: 'Already submitted' });
   }
 

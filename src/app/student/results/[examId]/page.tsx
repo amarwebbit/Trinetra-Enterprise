@@ -26,7 +26,7 @@ export default async function StudentResultDetailPage(
     where: {
       exam_id: examId,
       student_id: studentId,
-      status: { in: ['submitted', 'evaluated'] },
+      status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] },
     },
     include: {
       exams: {

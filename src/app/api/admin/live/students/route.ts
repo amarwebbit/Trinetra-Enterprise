@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const where: any = {
       tenant_id: tenantId,
       status: {
-        in: ['in_progress', 'submitted', 'auto_submitted', 'flagged']
+        in: ['in_progress', 'submitted', 'auto_submitted', 'force_submitted', 'flagged']
       },
       created_at: {
         gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours

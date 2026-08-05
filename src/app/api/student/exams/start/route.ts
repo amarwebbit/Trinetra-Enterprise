@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     where: {
       exam_id: examId,
       student_id: session.user.id,
-      status: { in: ['submitted', 'graded', 'evaluated'] },
+      status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'graded', 'evaluated'] },
     },
   });
 

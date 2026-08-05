@@ -11,7 +11,7 @@ function getTenantId(session: any) {
 
 export async function forceSubmit(attemptId: string) {
   const session = await getServerSession(authOptions);
-  if (!session || !['admin', 'super_admin'].includes(session.user.role)) {
+  if (!session || !['admin', 'teacher', 'super_admin'].includes(session.user.role)) {
     throw new Error('Unauthorized');
   }
 
@@ -30,10 +30,23 @@ export async function forceSubmit(attemptId: string) {
   await prisma.exam_attempts.update({
     where: { id: attemptId },
     data: { 
-      status: 'submitted',
-      end_time: new Date()
+      status: 'force_submitted',
+      end_time: new Date(),
+      updated_at: new Date(),
     }
   });
+
+  try {
+    await prisma.proctoring_logs.create({
+      data: {
+        tenant_id: tenantId,
+        attempt_id: attemptId,
+        event_type: 'force_stopped',
+        severity: 'critical',
+        event_data: { stopped_by: session.user.id, role: session.user.role, timestamp: new Date().toISOString() },
+      }
+    });
+  } catch (e) {}
 
   await prisma.audit_logs.create({
     data: {
@@ -47,12 +60,13 @@ export async function forceSubmit(attemptId: string) {
 
   // Revalidate to instantly update UI if not relying solely on polling
   revalidatePath('/admin/live');
+  revalidatePath('/teacher/live');
   return { success: true };
 }
 
 export async function endExam(examId: string) {
   const session = await getServerSession(authOptions);
-  if (!session || !['admin', 'super_admin'].includes(session.user.role)) {
+  if (!session || !['admin', 'teacher', 'super_admin'].includes(session.user.role)) {
     throw new Error('Unauthorized');
   }
 
@@ -62,6 +76,19 @@ export async function endExam(examId: string) {
     where: { id: examId, tenant_id: tenantId },
     data: { 
       end_time: new Date() // Forces all attempts to expire based on timeframe rules
+    }
+  });
+
+  // Force submit all in_progress attempts for this exam immediately
+  await prisma.exam_attempts.updateMany({
+    where: {
+      exam_id: examId,
+      status: 'in_progress'
+    },
+    data: {
+      status: 'force_submitted',
+      end_time: new Date(),
+      updated_at: new Date()
     }
   });
 
@@ -76,6 +103,7 @@ export async function endExam(examId: string) {
   });
 
   revalidatePath('/admin/live');
+  revalidatePath('/teacher/live');
   return { success: true };
 }
 
