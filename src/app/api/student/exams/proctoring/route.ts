@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { attemptId, eventType, severity } = await req.json();
+  const { attemptId, eventType, severity, violationCount, violationThreshold } = await req.json();
 
   if (!attemptId || !eventType) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -22,6 +22,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Attempt not found or unauthorized' }, { status: 404 });
   }
 
+  if (attempt.status !== 'in_progress') {
+    return NextResponse.json({
+      success: true,
+      forceStopped: true,
+      status: attempt.status,
+      message: 'Exam session is no longer active',
+    });
+  }
+
   // Log the violation / heartbeat event safely
   try {
     await prisma.proctoring_logs.create({
@@ -30,7 +39,11 @@ export async function POST(req: Request) {
         attempt_id: attemptId,
         event_type: eventType,
         severity: severity,
-        event_data: { timestamp: new Date().toISOString() },
+        event_data: {
+          timestamp: new Date().toISOString(),
+          violationCount: violationCount ?? null,
+          violationThreshold: violationThreshold ?? null,
+        },
       },
     });
   } catch (logErr) {

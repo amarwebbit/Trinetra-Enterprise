@@ -26,14 +26,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
     }
 
-    // Force submit
+    // Force submit attempt
     await prisma.exam_attempts.update({
       where: { id: attemptId },
       data: {
-        status: 'submitted',
+        status: 'force_submitted',
         end_time: new Date(),
+        updated_at: new Date(),
       }
     });
+
+    try {
+      await prisma.proctoring_logs.create({
+        data: {
+          tenant_id: attempt.tenant_id,
+          attempt_id: attemptId,
+          event_type: 'force_stopped',
+          severity: 'critical',
+          event_data: { stopped_by: session.user.id, role: session.user.role, timestamp: new Date().toISOString() },
+        }
+      });
+    } catch (logErr) {
+      console.warn('Failed to record force stop proctoring log:', logErr);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

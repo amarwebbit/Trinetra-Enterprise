@@ -72,6 +72,7 @@ export function ExamInterfaceUI({
   const isSubmittingRef = useRef(false);
   const violationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastViolationTimeRef = useRef<number>(0);
+  const lastViolationByEventRef = useRef<Record<string, number>>({});
   const isResumingRef = useRef<boolean>(false);
 
   // Restore initial answers
@@ -138,42 +139,45 @@ export function ExamInterfaceUI({
     }
   }, [currentQuestionIndex, currentQuestion]);
 
-  // Unified submit function — saves all answers and updates attempt status
+  // Unified submit function — saves all answers and updates attempt status with retry loop
   const submitExam = useCallback(async (auto: boolean = false) => {
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
-    try {
-      if (violationIntervalRef.current) {
-        clearInterval(violationIntervalRef.current);
-        violationIntervalRef.current = null;
-      }
-
-      const currentAnswers = { ...userAnswersRef.current };
-      await fetch('/api/student/exams/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attemptId: attempt.id,
-          auto,
-          answers: currentAnswers,
-        }),
-      });
-
-      localStorage.removeItem(pendingKey);
-
-      if (document.exitFullscreen && document.fullscreenElement) {
-        await document.exitFullscreen().catch(() => {});
-      }
-
-      // Hard replace browser history to prevent back navigation
-      window.location.replace(`/student/results/${attempt.exam_id}`);
-    } catch (error) {
-      console.error('Submit error:', error);
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+    if (violationIntervalRef.current) {
+      clearInterval(violationIntervalRef.current);
+      violationIntervalRef.current = null;
     }
+
+    const currentAnswers = { ...userAnswersRef.current };
+
+    for (let attemptCount = 0; attemptCount < 3; attemptCount++) {
+      try {
+        const res = await fetch('/api/student/exams/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attemptId: attempt.id,
+            auto,
+            answers: currentAnswers,
+          }),
+        });
+        if (res.ok) break;
+      } catch (error) {
+        console.warn(`Submit attempt ${attemptCount + 1} failed:`, error);
+        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attemptCount)));
+      }
+    }
+
+    localStorage.removeItem(pendingKey);
+
+    if (document.exitFullscreen && document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => {});
+    }
+
+    // Hard replace browser history to prevent back navigation
+    window.location.replace(`/student/results/${attempt.exam_id}`);
   }, [attempt.id, attempt.exam_id, pendingKey]);
 
   // Violation Timer Helpers
@@ -205,12 +209,14 @@ export function ExamInterfaceUI({
     violationIntervalRef.current = interval;
   }, [autoSubmitSeconds, submitExam]);
 
-  // Centralized violation trigger with 4s debouncing & resume-suppression
+  // Centralized violation trigger with event-specific debouncing & resume-suppression
   const triggerSecurityViolation = useCallback((eventType: string) => {
     const now = Date.now();
+    const lastTime = lastViolationByEventRef.current[eventType] || 0;
+    const minInterval = eventType === 'keyboard_shortcut' ? 2000 : 1500;
 
-    // Ignore secondary events within 4 seconds of the last violation
-    if (now - lastViolationTimeRef.current < 4000) {
+    // Ignore repeated event within minInterval
+    if (now - lastTime < minInterval) {
       return;
     }
     // Ignore events if user is currently resuming or if violation modal is already open
@@ -218,7 +224,7 @@ export function ExamInterfaceUI({
       return;
     }
 
-    lastViolationTimeRef.current = now;
+    lastViolationByEventRef.current[eventType] = now;
 
     setViolationCount(prev => {
       const newCount = prev + 1;
@@ -230,6 +236,8 @@ export function ExamInterfaceUI({
         body: JSON.stringify({
           attemptId: attempt.id,
           eventType,
+          violationCount: newCount,
+          violationThreshold,
           severity: newCount >= violationThreshold ? 'critical' : 'high',
         }),
       }).catch(console.error);
@@ -336,9 +344,10 @@ export function ExamInterfaceUI({
     return () => window.removeEventListener('online', flushPendingSave);
   }, [pendingKey]);
 
-  // --- Heartbeat Ping (every 15s) ---
+  // --- Heartbeat Ping & Force Stop Check (every 5s) ---
   useEffect(() => {
     const heartbeatInterval = setInterval(() => {
+      if (isSubmittingRef.current) return;
       fetch('/api/student/exams/proctoring', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -347,21 +356,46 @@ export function ExamInterfaceUI({
           eventType: 'heartbeat',
           severity: 'low',
         }),
-      }).catch(console.error);
-    }, 15000);
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.forceStopped || (data?.status && data.status !== 'in_progress')) {
+            if (isSubmittingRef.current) return;
+            isSubmittingRef.current = true;
+            setIsSubmitting(true);
+            toast.error('Your exam session was ended by the invigilator.', { duration: 5000 });
+            if (document.exitFullscreen && document.fullscreenElement) {
+              document.exitFullscreen().catch(() => {});
+            }
+            setTimeout(() => {
+              window.location.replace(`/student/results/${attempt.exam_id}`);
+            }, 800);
+          }
+        })
+        .catch(console.error);
+    }, 5000);
     return () => clearInterval(heartbeatInterval);
-  }, [attempt.id]);
+  }, [attempt.id, attempt.exam_id]);
 
-  // --- Tab Switch Detection (Only when tab/window is hidden) ---
+  // --- Tab Switch & Window Blur Detection ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         triggerSecurityViolation('tab_switch');
       }
     };
+    const handleWindowBlur = () => {
+      if (!document.hidden) {
+        triggerSecurityViolation('window_blur');
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
     };
   }, [triggerSecurityViolation]);
 
@@ -444,6 +478,7 @@ export function ExamInterfaceUI({
   // Beforeunload Warning Handler (Prevent Accidental Tab Close / Refresh)
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isSubmittingRef.current) return;
       e.preventDefault();
       e.returnValue = 'Your exam is currently in progress. Submissions are auto-saved.';
     };

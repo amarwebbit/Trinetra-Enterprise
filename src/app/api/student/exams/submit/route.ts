@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Exam is not available for submission' }, { status: 403 });
   }
 
-  if (attempt.status === 'submitted' || attempt.status === 'evaluated') {
+  if (['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'].includes(attempt.status)) {
     return NextResponse.json({ success: true, message: 'Already submitted' });
   }
 
@@ -118,6 +118,19 @@ export async function POST(req: Request) {
   let totalPossibleMarks = 0;
   const questionResults = [];
 
+  const parseCorrectAnswers = (raw: any): string[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map(x => String(x).trim().toLowerCase());
+    const str = String(raw).trim();
+    if (str.startsWith('[') && str.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(str);
+        if (Array.isArray(parsed)) return parsed.map(x => String(x).trim().toLowerCase());
+      } catch (e) {}
+    }
+    return str.split(',').map(a => a.trim().toLowerCase()).filter(Boolean);
+  };
+
   // Evaluate EVERY question in the exam
   for (const question of allExamQuestions) {
     const marks = Number(question.marks || 1);
@@ -135,10 +148,12 @@ export async function POST(req: Request) {
       marksObtained = 0;
     } else {
       const type = (question.type || '').toLowerCase();
-      const correctAnswer = (question.correct_answer || '').trim();
+      const rawCorrect = question.correct_answer;
 
       if (type === 'mcq' || type === 'mcq_single') {
-        isCorrect = studentAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        const correctAnswers = parseCorrectAnswers(rawCorrect);
+        const targetCorrect = correctAnswers.length > 0 ? correctAnswers[0] : String(rawCorrect || '').trim().toLowerCase();
+        isCorrect = studentAnswer.toLowerCase() === targetCorrect;
         marksObtained = isCorrect ? marks : -negativeMarks;
       } else if (type === 'msq' || type === 'mcq_multiple') {
         const studentAnswers = studentAnswer
@@ -146,30 +161,34 @@ export async function POST(req: Request) {
           .map((a: string) => a.trim().toLowerCase())
           .filter((a: string) => a.length > 0)
           .sort();
-        const correctAnswers = correctAnswer
-          .split(',')
-          .map((a: string) => a.trim().toLowerCase())
-          .filter((a: string) => a.length > 0)
-          .sort();
+        const correctAnswers = parseCorrectAnswers(rawCorrect).sort();
 
         isCorrect = studentAnswers.length === correctAnswers.length &&
                     studentAnswers.every((val: string, index: number) => val === correctAnswers[index]);
         marksObtained = isCorrect ? marks : -negativeMarks;
       } else if (type === 'nat') {
         const studentNum = parseFloat(studentAnswer);
-        const correctNum = parseFloat(correctAnswer);
+        const correctNum = parseFloat(String(rawCorrect || ''));
+        const natNegative = (question as any).negative_marks_enabled ? negativeMarks : 0;
+
         if (isNaN(studentNum) || isNaN(correctNum)) {
-          marksObtained = -negativeMarks;
+          marksObtained = -natNegative;
           isCorrect = false;
         } else {
           const metadata = (question.metadata as any) || {};
-          const tolerance = metadata.tolerance !== undefined ? parseFloat(metadata.tolerance) : 0.01;
+          const qNatTol = (question as any).nat_tolerance;
+          const tolerance = qNatTol !== undefined && qNatTol !== null && !isNaN(parseFloat(qNatTol))
+            ? parseFloat(qNatTol)
+            : (metadata.tolerance !== undefined && !isNaN(parseFloat(metadata.tolerance)) ? parseFloat(metadata.tolerance) : 0.01);
+          
           const difference = Math.abs(studentNum - correctNum);
           isCorrect = difference <= tolerance;
-          marksObtained = isCorrect ? marks : -negativeMarks;
+          marksObtained = isCorrect ? marks : -natNegative;
         }
       } else {
-        isCorrect = studentAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        const correctAnswers = parseCorrectAnswers(rawCorrect);
+        const targetCorrect = correctAnswers.length > 0 ? correctAnswers[0] : String(rawCorrect || '').trim().toLowerCase();
+        isCorrect = studentAnswer.toLowerCase() === targetCorrect;
         marksObtained = isCorrect ? marks : -negativeMarks;
       }
     }
@@ -208,6 +227,7 @@ export async function POST(req: Request) {
   }
 
   // 4. Fix Final Score Calculation (update)
+  const finalStatus = auto ? 'auto_submitted' : 'submitted';
   const percentage = totalPossibleMarks > 0 
     ? (totalObtainedMarks / totalPossibleMarks) * 100 
     : 0;
@@ -218,8 +238,9 @@ export async function POST(req: Request) {
       score: totalObtainedMarks,
       total_marks: totalPossibleMarks,
       percentage: percentage,
-      status: 'submitted',
+      status: finalStatus,
       end_time: new Date(),
+      updated_at: new Date(),
     },
   });
 
@@ -228,7 +249,7 @@ export async function POST(req: Request) {
     where: {
       exam_id: attempt.exam_id,
       student_id: actor.studentId,
-      status: { in: ['submitted', 'graded', 'evaluated'] }
+      status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'graded', 'evaluated'] }
     }
   });
 
