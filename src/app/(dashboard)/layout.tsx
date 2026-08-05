@@ -12,11 +12,16 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [mounted, setMounted] = React.useState(false);
   const { sidebarOpen, setSidebarOpen } = useStore();
   const config = useWhiteLabel();
 
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-muted/10 relative">
+    <div className="min-h-screen bg-muted/10 relative" suppressHydrationWarning>
       {/* Mobile Backdrop Overlay */}
       {sidebarOpen && (
         <div 
@@ -48,14 +53,15 @@ export default function DashboardLayout({
         {/* ✅ White-label Footer */}
         <footer 
           className="border-t px-6 py-3 text-center text-sm"
-          style={{ 
-            borderColor: config?.primaryColor ? `${config.primaryColor}40` : 'var(--border)',
-          }}
+          style={mounted && config?.primaryColor ? { 
+            borderColor: `${config.primaryColor}40`,
+          } : undefined}
+          suppressHydrationWarning
         >
-          <span style={{ color: config?.secondaryColor || 'currentColor' }}>
-            {config?.footerText || `${config?.tenantName || 'Institution'} - All rights reserved`}
+          <span style={mounted && config?.secondaryColor ? { color: config.secondaryColor } : undefined} suppressHydrationWarning>
+            {mounted && config?.footerText ? config.footerText : `${mounted && config?.tenantName ? config.tenantName : 'Institution'} - All rights reserved`}
           </span>
-          {!config?.removeBranding && (
+          {(!mounted || !config?.removeBranding) && (
             <span className="ml-2 text-muted-foreground">| Powered by TrinetraEdu-AI</span>
           )}
         </footer>

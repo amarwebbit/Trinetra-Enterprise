@@ -9,6 +9,20 @@ import { AssignmentCard } from './components/AssignmentCard';
 import { useState, useEffect } from 'react';
 import { BookOpen, CheckCircle, Trophy, Clock, SearchX, Inbox, BookDashed, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useStore } from '@/store/useStore';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from 'recharts';
+
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-950/90 border border-slate-800 p-3 rounded-lg shadow-xl backdrop-blur-md">
+        <p className="text-[10px] font-semibold text-slate-400">{payload[0].payload.name}</p>
+        <p className="text-xs font-extrabold text-blue-400 mt-1">Score: {payload[0].value}%</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 interface StudentUIProps {
   upcomingExams: any[];
@@ -27,7 +41,7 @@ interface StudentUIProps {
   studentId: string;
 }
 
-export function StudentUI({ 
+export default function StudentUI({ 
   upcomingExams, 
   activeExams, 
   assignments,
@@ -36,6 +50,11 @@ export function StudentUI({
   stats,
   studentName,
 }: StudentUIProps) {
+  const { theme } = useStore();
+  const isDark = theme === 'dark';
+  const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+  const chartStroke = isDark ? '#8b5cf6' : '#6366f1';
+
   const hasUpcoming = upcomingExams.length > 0;
   const hasActive = activeExams.length > 0;
   const hasResults = recentResults.length > 0;
@@ -46,6 +65,11 @@ export function StudentUI({
 
   // Animation states for staggering
   const [isLoaded, setIsLoaded] = useState(false);
+  const [mountedChart, setMountedChart] = useState(false);
+
+  useEffect(() => {
+    setMountedChart(true);
+  }, []);
 
   useEffect(() => {
     setIsLoaded(true);
@@ -98,6 +122,18 @@ export function StudentUI({
   
   const displayResults = liveResults.length > 0 ? liveResults : recentResults;
   const hasLiveResults = displayResults.length > 0;
+
+  const chartData = displayResults.length > 0 
+    ? [...displayResults].reverse().map((r: any) => ({
+        name: r.exams?.title?.substring(0, 12) || 'Test',
+        Score: Math.round(r.percentage || 0),
+      }))
+    : [
+        { name: 'Practice 1', Score: 60 },
+        { name: 'Practice 2', Score: 72 },
+        { name: 'Mock Exam', Score: 68 },
+        { name: 'Final Quiz', Score: 85 },
+      ];
 
   const initials = studentName?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'ST';
   
@@ -161,14 +197,14 @@ export function StudentUI({
           {hasActive && (
             <div className="space-y-4">
               <div className="flex justify-between items-end">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <span className="relative flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                   </span>
                   Live Now
                 </h2>
-                <Link href="/student/exams" className="text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 group">
+                <Link href="/student/exams" className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 group">
                   View All <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </Link>
               </div>
@@ -183,10 +219,10 @@ export function StudentUI({
           {/* Upcoming Exams */}
           <div className="space-y-4">
             <div className="flex justify-between items-end">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 Upcoming Exams
               </h2>
-              <Link href="/student/exams" className="text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 group">
+              <Link href="/student/exams" className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 group">
                 View All <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
@@ -198,70 +234,36 @@ export function StudentUI({
                 ))}
               </div>
             ) : (
-              <div className="bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl p-10 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center text-blue-500 mb-4">
+              <div className="bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-10 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center text-blue-500 dark:text-blue-400 mb-4">
                   <SearchX className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">No upcoming exams</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">No upcoming exams</h3>
                 <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-sm">
                   You don't have any upcoming exams scheduled at the moment. Enjoy your free time or review past results!
                 </p>
                 <Link href="/student/exams">
-                  <Button variant="outline" className="rounded-full">Browse Courses</Button>
+                  <Button variant="outline" className="rounded-full border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700">Browse Courses</Button>
                 </Link>
               </div>
             )}
           </div>
 
-          {/* Practice Assignments */}
+          {/* Practice & Coursework Assignments */}
           {hasAssignmentExams && (
             <div className="space-y-4">
               <div className="flex justify-between items-end">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  Practice Assignments
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/30">
+                    <BookOpen className="w-5 h-5" />
+                  </span>
+                  Practice & Coursework Assignments
                 </h2>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {assignmentExams.map((exam: any) => {
-                  const attempted = exam.exam_attempts?.length > 0;
-                  const attempt = exam.exam_attempts?.[0];
-                  const isCompleted = attempted && attempt?.status !== 'in_progress';
-                  const dueDate = (exam.metadata as any)?.due_date;
-                  return (
-                    <Link
-                      key={exam.id}
-                      href={`/student/exams/${exam.id}/instructions`}
-                      className="group block p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-blue-400 hover:shadow-md transition-all duration-300 relative overflow-hidden"
-                    >
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 dark:bg-blue-900/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                      <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className={`p-2 rounded-lg ${isCompleted ? 'bg-emerald-100 text-emerald-600' : attempted ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'}`}>
-                            <BookDashed className="w-4 h-4" />
-                          </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            isCompleted
-                              ? 'border-emerald-200 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800/50 dark:text-emerald-400'
-                              : attempted
-                              ? 'border-amber-200 text-amber-700 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800/50 dark:text-amber-400'
-                              : 'border-slate-200 text-slate-500 bg-slate-50 dark:bg-slate-800/50 dark:border-slate-700'
-                          }`}>
-                            {isCompleted ? 'Completed' : attempted ? 'In Progress' : 'Not Started'}
-                          </span>
-                        </div>
-                        <p className="font-bold text-slate-900 dark:text-white line-clamp-2 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{exam.title}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {exam._count?.exam_sections || 0} section(s)
-                        </p>
-                        {dueDate && (
-                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 font-medium">
-                            Due: {formatDateForHydration(dueDate)}
-                          </p>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
+              <div className="space-y-3">
+                {assignmentExams.map((assignment: any) => (
+                  <AssignmentCard key={assignment.id} assignment={assignment} />
+                ))}
               </div>
             </div>
           )}
@@ -270,7 +272,7 @@ export function StudentUI({
           {assignments.length > 0 && (
             <div className="space-y-4">
               <div className="flex justify-between items-end">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   Files & Resources
                 </h2>
               </div>
@@ -284,14 +286,43 @@ export function StudentUI({
           
         </div>
 
-        {/* Right Column: Recent Results */}
-        <div className="lg:col-span-5">
-          <div className="space-y-4 sticky top-6">
+        {/* Right Column: Recent Results & Analytics */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Preparation & Score Trends Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm dark:shadow-lg relative overflow-hidden">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-200 mb-4 flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-amber-500" />
+              Preparation & Performance Trends
+            </h3>
+            <div className="h-48 w-full">
+              {mountedChart ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={chartStroke} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={chartStroke} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={9} tickLine={false} />
+                    <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={9} tickLine={false} axisLine={false} domain={[0, 100]} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="Score" stroke={chartStroke} strokeWidth={2} fillOpacity={1} fill="url(#scoreColor)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full bg-slate-100 dark:bg-slate-800/40 animate-pulse rounded" />
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
             <div className="flex justify-between items-end">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 Recent Results
               </h2>
-              <Link href="/student/results" className="text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 group">
+              <Link href="/student/results" className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 group">
                 View All <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
@@ -310,16 +341,16 @@ export function StudentUI({
                 ))}
               </div>
             ) : (
-              <div className="bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl p-10 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center text-purple-500 mb-4">
+              <div className="bg-slate-50 dark:bg-slate-900/80 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-10 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800/50 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
                   <Inbox className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">No results yet</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">No results yet</h3>
                 <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-[200px]">
                   Complete an exam to see your performance metrics and grades here.
                 </p>
                 <Link href="/student/results">
-                  <Button variant="outline" className="rounded-full">View History</Button>
+                  <Button variant="outline" className="rounded-full border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700">View History</Button>
                 </Link>
               </div>
             )}

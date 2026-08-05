@@ -103,25 +103,31 @@ export function AvailableExamsUI({
       }
     }
 
-    // 4. For Live Exams: Single attempt / strict rules (unchanged!)
-    if (exam.studentAttempt) {
-      if (exam.studentAttempt.status === 'submitted' || exam.studentAttempt.status === 'evaluated') {
-        if (exam.show_results_immediately) {
-          return {
-            label: 'View Results',
-            href: `/student/results/${exam.id}`,
-            color: 'bg-purple-600 hover:bg-purple-700 text-white',
-          };
-        }
+    // 4. For Live/Standard Exams: Check attempt limit
+    if (completedCount >= maxAttempts) {
+      if (exam.show_results_immediately) {
         return {
-          label: '⏳ Submitted',
-          href: '#',
-          color: 'bg-gray-400 text-white cursor-not-allowed',
-          disabled: true,
+          label: 'View Results',
+          href: `/student/results/${exam.id}`,
+          color: 'bg-purple-600 hover:bg-purple-700 text-white',
         };
       }
+      return {
+        label: '⏳ Submitted',
+        href: '#',
+        color: 'bg-gray-400 text-white cursor-not-allowed',
+        disabled: true,
+      };
     }
     
+    if (completedCount > 0 && completedCount < maxAttempts) {
+      return {
+        label: `Re-attempt (${completedCount + 1}/${maxAttempts})`,
+        href: `/student/exams/${exam.id}/instructions`,
+        color: 'bg-purple-600 hover:bg-purple-700 text-white font-bold',
+      };
+    }
+
     if (exam.start_time <= now && exam.end_time >= now) {
       return {
         label: 'Start Exam',

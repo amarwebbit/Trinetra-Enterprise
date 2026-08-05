@@ -22,10 +22,10 @@ export default async function ExamInstructionsPage(
 
   const { examId } = params;
   const studentId = session.user.id;
-  const tenantId = session.user.tenantId || (session.user as any).tenant_id;
+  const tenantId = (session.user.tenantId || (session.user as any).tenant_id || '') as string;
 
   // Fetch exam with all required data - REAL data only
-  const dbExam = await prisma.exams.findUnique({
+  const dbExam = await prisma.exams.findFirst({
     where: {
       id: examId,
       tenant_id: tenantId,
@@ -42,7 +42,8 @@ export default async function ExamInstructionsPage(
       },
       exam_attempts: {
         where: { student_id: studentId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, created_at: true },
+        orderBy: { created_at: 'desc' },
       },
     },
   });
@@ -60,20 +61,36 @@ export default async function ExamInstructionsPage(
   const now = new Date();
   const isStarted = new Date(exam.start_time) <= now;
   const isEnded = new Date(exam.end_time) <= now;
-  const isAvailable = isStarted && !isEnded;
-  const hasAttempted = exam.exam_attempts.length > 0;
 
-  // If exam has ended and no attempt, redirect to exams list
-  if (isEnded && !hasAttempted) {
+  // 1. If student has an active attempt in progress, resume it immediately
+  const inProgressAttempt = exam.exam_attempts.find(a => a.status === 'in_progress');
+  if (inProgressAttempt) {
+    redirect(`/student/exams/${inProgressAttempt.id}/take`);
+  }
+
+  // 2. Count completed attempts for this student
+  const completedAttemptsCount = exam.exam_attempts.filter(a => 
+    a.status && ['submitted', 'auto_submitted', 'force_submitted', 'graded', 'evaluated'].includes(a.status)
+  ).length;
+
+  const maxAllowedAttempts = exam.max_attempts || (exam.metadata as any)?.max_attempts || (exam.exam_type === 'assignment' ? 5 : 1);
+
+  // 3. If student reached or exceeded maximum allowed attempts OR exam has ended with completed attempts -> redirect to results
+  if (completedAttemptsCount >= maxAllowedAttempts || (isEnded && completedAttemptsCount > 0)) {
+    redirect(`/student/results/${examId}`);
+  }
+
+  // 4. If exam has ended and student has no completed attempts -> redirect to exams list
+  if (isEnded && completedAttemptsCount === 0) {
     redirect('/student/exams');
   }
 
-  // If exam hasn't started yet — show waiting room with countdown
-  if (!isStarted && !hasAttempted) {
-    const tenant = await prisma.tenants.findUnique({
+  // 5. If exam hasn't started yet -> show waiting room with countdown
+  if (!isStarted && completedAttemptsCount === 0) {
+    const tenant = tenantId ? await prisma.tenants.findUnique({
       where: { id: tenantId },
       select: { name: true, logo_url: true, primary_color: true },
-    });
+    }) : null;
     const totalQuestions = exam.sections.reduce(
       (sum, s) => sum + s._count.exam_questions, 0
     );
@@ -91,14 +108,7 @@ export default async function ExamInstructionsPage(
     );
   }
 
-  if (hasAttempted && exam.exam_attempts[0].status !== 'in_progress') {
-    redirect(`/student/results/${examId}`);
-  } else if (hasAttempted && exam.exam_attempts[0].status === 'in_progress') {
-    // If they already started it, send them straight into the exam
-    redirect(`/student/exams/${exam.exam_attempts[0].id}/take`);
-  }
-
-  // ✅ Check show_instructions from database model, fallback to metadata
+  // Check show_instructions from database model, fallback to metadata
   const showInstructions = exam.show_instructions !== null 
     ? exam.show_instructions 
     : (exam.metadata as any)?.show_instructions !== false;
@@ -130,14 +140,14 @@ export default async function ExamInstructionsPage(
   }
 
   // Fetch tenant branding for white-label
-  const tenant = await prisma.tenants.findUnique({
+  const tenant = tenantId ? await prisma.tenants.findUnique({
     where: { id: tenantId },
     select: {
       name: true,
       logo_url: true,
       primary_color: true,
     },
-  });
+  }) : null;
 
   // Calculate total marks and questions
   const totalQuestions = exam.sections.reduce(

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { LiveMonitoringUI } from '@/app/(dashboard)/teacher/live/LiveMonitoringUI';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 export default function AdminLiveMonitoringPage() {
   const [students, setStudents] = useState([]);

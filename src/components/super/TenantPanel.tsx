@@ -150,7 +150,7 @@ export default function TenantPanel({ initialTenants, studentCount, activeExamsC
       {/* 2. Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatsCard title="Total Tenants" value={initialTenants.length} description="Active & suspended domains" icon={Server} />
-        <StatsCard title="Active Exams" value={activeExamsCount} description="Exams running right now" icon={Activity} />
+        <StatsCard title="Total Active Exams" value={activeExamsCount} description="Exams created across all tenants" icon={Activity} />
         <StatsCard title="Total Students" value={studentCount} description="Across all onboarded tenants" icon={Users} />
         
         {/* System CPU/Memory gauge summary */}

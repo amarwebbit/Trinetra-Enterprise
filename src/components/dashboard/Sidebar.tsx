@@ -30,8 +30,13 @@ interface SidebarItemProps {
 
 function SidebarItem({ href, icon: Icon, label, primaryColor }: SidebarItemProps & { primaryColor?: string }) {
   const pathname = usePathname();
-  const isActive = pathname === href || (href !== '/student' && href !== '/teacher' && href !== '/admin' && href !== '/super' && pathname.startsWith(`${href}/`));
+  const [mounted, setMounted] = React.useState(false);
 
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isActive = pathname === href || (href !== '/student' && href !== '/teacher' && href !== '/admin' && href !== '/super' && pathname.startsWith(`${href}/`));
   const activeBg = primaryColor || '#2563EB';
 
   return (
@@ -44,13 +49,14 @@ function SidebarItem({ href, icon: Icon, label, primaryColor }: SidebarItemProps
           : 'border-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
       )}
       style={
-        isActive
+        isActive && mounted && primaryColor
           ? { backgroundColor: activeBg, borderColor: activeBg }
-          : {}
+          : undefined
       }
+      suppressHydrationWarning
     >
       <Icon className="h-5 w-5 shrink-0" />
-      <span>{label}</span>
+      <span suppressHydrationWarning>{label}</span>
     </Link>
   );
 }

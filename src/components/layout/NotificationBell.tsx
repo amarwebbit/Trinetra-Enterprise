@@ -30,11 +30,19 @@ const CACHE_TTL_MS = 60000; // 60 seconds cache
 export function NotificationBell() {
   const { data: session, status } = useSession();
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(() => globalNotificationCache.data?.notifications || []);
-  const [unreadCount, setUnreadCount] = useState<number>(() => globalNotificationCache.data?.unreadCount || 0);
-  const [isLoading, setIsLoading] = useState(!globalNotificationCache.data);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (globalNotificationCache.data) {
+      setNotifications(globalNotificationCache.data.notifications);
+      setUnreadCount(globalNotificationCache.data.unreadCount);
+      setIsLoading(false);
+    }
+  }, []);
 
   const fetchNotifications = useCallback(async (force = false) => {
     // 1. Skip if user is not authenticated or session is loading

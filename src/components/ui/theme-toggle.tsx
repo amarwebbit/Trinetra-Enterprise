@@ -7,7 +7,12 @@ import { Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ThemeToggle() {
+  const [mounted, setMounted] = React.useState(false);
   const { theme, toggleTheme } = useStore();
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleToggle = () => {
     toggleTheme();
@@ -23,8 +28,9 @@ export default function ThemeToggle() {
       onClick={handleToggle}
       className="rounded-none shrink-0"
       aria-label="Toggle theme mode"
+      suppressHydrationWarning
     >
-      {theme === 'light' ? (
+      {!mounted || theme === 'light' ? (
         <Moon className="h-5 w-5 text-muted-foreground hover:text-foreground" />
       ) : (
         <Sun className="h-5 w-5 text-yellow-100 hover:text-white" />

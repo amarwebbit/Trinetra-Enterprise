@@ -122,11 +122,11 @@ export default async function SuperAdminDashboard() {
         />
         
         <StatCard 
-          title="Active Exams" 
+          title="Total Active Exams" 
           value={globalStats.activeExams} 
-          trendValue="Live" 
+          trendValue="Total" 
           isPositive={globalStats.activeExams > 0}
-          description="Exams running right now" 
+          description="Exams created across all tenants" 
           icon={Activity} 
         />
         
