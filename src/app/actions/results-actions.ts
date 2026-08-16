@@ -11,7 +11,7 @@ export async function getExamAnalytics(examId: string, tenantId: string) {
     where: { id: examId, tenant_id: tenantId },
     include: {
       exam_attempts: {
-        where: { status: { in: ['submitted', 'evaluated', 'graded'] } },
+        where: { status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] } },
         include: {
           users: {
             include: { departments_users_department_idTodepartments: true },
@@ -80,7 +80,7 @@ export async function getExamExportData(examId: string, tenantId: string) {
     where: { id: examId, tenant_id: tenantId },
     include: {
       exam_attempts: {
-        where: { status: { in: ['submitted', 'evaluated', 'graded'] } },
+        where: { status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] } },
         include: {
           users: {
             include: { departments_users_department_idTodepartments: true },
@@ -192,7 +192,7 @@ export async function exportExcel(examId: string) {
     where: { id: examId, tenant_id: session.user.tenantId },
     include: {
       exam_attempts: {
-        where: { status: { in: ['submitted', 'evaluated', 'graded'] } },
+        where: { status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] } },
         include: {
           users: { include: { departments_users_department_idTodepartments: true } },
           answers: { include: { questions: true } },

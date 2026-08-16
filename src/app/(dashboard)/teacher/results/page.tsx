@@ -42,7 +42,7 @@ export default async function TeacherResultsPage(
       _count: {
         select: {
           exam_attempts: {
-            where: { status: { in: ['submitted', 'evaluated', 'graded'] } }
+            where: { status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] } }
           }
         }
       }

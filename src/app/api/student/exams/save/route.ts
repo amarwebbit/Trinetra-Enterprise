@@ -1,138 +1,162 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/client';
-import { getExamActor } from '@/lib/auth/exam-guest';
-import { NextResponse } from 'next/server';
+import { timeService } from '@/lib/services/time.service';
+import { withExamRateLimit } from '@/lib/redis/with-rate-limit';
+import { withErrorHandler } from '@/lib/error-handler';
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 150): Promise<T> {
-  let lastError: any;
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      lastError = err;
-      if (i < retries - 1) {
-        await new Promise((res) => setTimeout(res, delayMs * Math.pow(2, i) + Math.random() * 100));
-      }
+async function saveHandler(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-  }
-  throw lastError;
-}
 
-export async function POST(req: Request) {
-  const actor = await getExamActor();
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+    const body = await request.json();
+    const { attemptId, answers, questionId, answerText, markedForReview, timeSpent, clientUpdatedAt } = body;
 
-  const tenantId = actor.tenantId;
-  const { attemptId, answers, markedForReview, questionId, answerText } = await req.json();
+    if (!attemptId) {
+      return NextResponse.json({ error: 'Missing attemptId' }, { status: 400 });
+    }
 
-  if (!attemptId) {
-    return NextResponse.json({ error: 'Missing attemptId' }, { status: 400 });
-  }
+    // 1. Validate individual time limit (CRITICAL FIX)
+    const timeValidation = await timeService.validateAttemptTime(attemptId);
+    if (!timeValidation.valid) {
+      return NextResponse.json(
+        { error: timeValidation.error || 'Time limit exceeded' },
+        { status: 403 }
+      );
+    }
 
-  // Verify attempt belongs to student with retry
-  const attempt = await withRetry(() =>
-    prisma.exam_attempts.findUnique({
+    // 2. Verify student owns this attempt
+    const attempt = await prisma.exam_attempts.findUnique({
       where: { id: attemptId },
-      include: { exams: { select: { start_time: true, end_time: true, is_active: true } } },
-    })
-  );
+      select: { student_id: true, status: true, tenant_id: true },
+    });
 
-  if (!attempt || attempt.student_id !== actor.studentId || (actor.guest && (actor.guest.attemptId !== attemptId || actor.guest.examId !== attempt.exam_id))) {
-    return NextResponse.json({ error: 'Attempt not found or unauthorized' }, { status: 404 });
-  }
-  const now = new Date();
-  if (attempt.status !== 'in_progress' || !attempt.exams.is_active || now < attempt.exams.start_time || now >= attempt.exams.end_time) {
-    return NextResponse.json({ error: 'This exam attempt is no longer editable' }, { status: 409 });
-  }
-
-  // Handle single answer save
-  if (questionId && answerText !== undefined) {
-    const permittedQuestion = await withRetry(() =>
-      prisma.exam_questions.findFirst({
-        where: { question_id: questionId, exam_sections: { exam_id: attempt.exam_id } },
-        select: { question_id: true },
-      })
-    );
-    if (!permittedQuestion) return NextResponse.json({ error: 'Question is not part of this exam' }, { status: 400 });
-    try {
-      await withRetry(async () => {
-        const existing = await prisma.answers.findFirst({
-          where: {
-            attempt_id: attemptId,
-            question_id: questionId,
-          }
-        });
-        
-        if (existing) {
-          await prisma.answers.update({
-            where: { id: existing.id },
-            data: {
-              answer_text: answerText,
-              updated_at: new Date(),
-            }
-          });
-        } else {
-          await prisma.answers.create({
-            data: {
-              attempt_id: attemptId,
-              question_id: questionId,
-              answer_text: answerText,
-              tenant_id: tenantId,
-            }
-          });
-        }
-      });
-      return NextResponse.json({ success: true, savedAt: new Date().toISOString() });
-    } catch (error) {
-      console.error('Single save error:', error);
-      return NextResponse.json({ error: 'Failed to save answer' }, { status: 500 });
+    if (!attempt || attempt.student_id !== session.user.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-  }
 
-  // Bulk save answers
-  const existingAnswers = await withRetry(() =>
-    prisma.answers.findMany({
-      where: { attempt_id: attemptId }
-    })
-  );
-  
-  const existingAnswerMap = new Map(existingAnswers.map(a => [a.question_id, a.id]));
-  const operations: any[] = [];
+    if (attempt.status !== 'in_progress') {
+      return NextResponse.json(
+        { error: 'This attempt is already submitted' },
+        { status: 403 }
+      );
+    }
 
-  if (answers) {
-    for (const [qId, aText] of Object.entries(answers)) {
-      if (typeof aText !== 'string') continue;
-      const existingId = existingAnswerMap.get(qId);
-      
-      if (existingId) {
-        operations.push(
-          prisma.answers.update({
-            where: { id: existingId },
-            data: {
-              answer_text: aText,
-              updated_at: new Date()
-            }
-          })
-        );
+    // Normalized answers list for upserting
+    let answersList: Array<{
+      questionId: string;
+      answerText: string | null;
+      markedForReview?: boolean;
+      timeSpent?: number;
+      clientUpdatedAt?: string;
+    }> = [];
+
+    if (Array.isArray(answers)) {
+      answersList = answers.map((ans: any) => ({
+        questionId: ans.questionId,
+        answerText: ans.selectedOption !== undefined ? ans.selectedOption : (ans.answerText || ''),
+        markedForReview: ans.markedForReview || false,
+        timeSpent: ans.timeSpent || 0,
+        clientUpdatedAt: ans.clientUpdatedAt || clientUpdatedAt,
+      }));
+    } else if (questionId) {
+      answersList = [{
+        questionId,
+        answerText: answerText || '',
+        markedForReview: markedForReview || false,
+        timeSpent: timeSpent || 0,
+        clientUpdatedAt: clientUpdatedAt,
+      }];
+    } else {
+      return NextResponse.json({ error: 'No answers payload provided' }, { status: 400 });
+    }
+
+    // 3. Process each answer with timestamp validation
+    const results = [];
+
+    for (const ans of answersList) {
+      const existingAnswer = await prisma.answers.findFirst({
+        where: {
+          attempt_id: attemptId,
+          question_id: ans.questionId,
+        },
+        select: {
+          id: true,
+          updated_at: true,
+        },
+      });
+
+      // If updating, check timestamp to prevent stale overwrites
+      if (existingAnswer && ans.clientUpdatedAt) {
+        const clientTime = new Date(ans.clientUpdatedAt).getTime();
+        const serverTime = new Date(existingAnswer.updated_at || 0).getTime();
+
+        if (clientTime < serverTime) {
+          results.push({
+            questionId: ans.questionId,
+            status: 'conflict',
+            message: 'A newer version of this answer exists',
+          });
+          continue;
+        }
+      }
+
+      const meta = {
+        marked_for_review: ans.markedForReview || false,
+        time_spent: ans.timeSpent || 0,
+      };
+
+      if (existingAnswer) {
+        const result = await prisma.answers.update({
+          where: { id: existingAnswer.id },
+          data: {
+            answer_text: ans.answerText,
+            metadata: meta,
+            updated_at: new Date(),
+          },
+        });
+        results.push({
+          questionId: ans.questionId,
+          status: 'success',
+          id: result.id,
+        });
       } else {
-        operations.push(
-          prisma.answers.create({
-            data: {
-              tenant_id: tenantId,
-              attempt_id: attemptId,
-              question_id: qId,
-              answer_text: aText,
-            }
-          })
-        );
+        const result = await prisma.answers.create({
+          data: {
+            tenant_id: attempt.tenant_id,
+            attempt_id: attemptId,
+            question_id: ans.questionId,
+            answer_text: ans.answerText,
+            metadata: meta,
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        });
+        results.push({
+          questionId: ans.questionId,
+          status: 'success',
+          id: result.id,
+        });
       }
     }
-  }
 
-  if (operations.length > 0) {
-    await withRetry(() => prisma.$transaction(operations));
-  }
+    return NextResponse.json({
+      success: true,
+      results,
+      remainingSeconds: timeValidation.remainingSeconds,
+    });
 
-  return NextResponse.json({ success: true, savedAt: new Date().toISOString() });
+  } catch (error) {
+    console.error('Save error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to save answers' },
+      { status: 500 }
+    );
+  }
 }
+
+export const POST = withErrorHandler(withExamRateLimit(saveHandler));

@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Search, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Calculator, CheckSquare, List as ListIcon, Image as ImageIcon, Folder, FolderPlus, Edit3, Save, X } from 'lucide-react';
-import { createQuestion, updateQuestion, deleteQuestion, importQuestionsFromJSON, createQuestionBank, updateQuestionBank, deleteQuestionBank } from '@/app/actions/question-actions';
+import { Search, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Calculator, CheckSquare, List as ListIcon, Image as ImageIcon, Folder, FolderPlus, Edit3, Save, X, Share2 } from 'lucide-react';
+import { createQuestion, updateQuestion, deleteQuestion, importQuestionsFromJSON, createQuestionBank, updateQuestionBank, deleteQuestionBank, toggleShareQuestionBank } from '@/app/actions/question-actions';
+import { useSession } from 'next-auth/react';
 import { RichTextEditor, compressImageFile } from '@/components/editor/RichTextEditor';
 import { QuestionPreview } from '@/components/teacher/QuestionPreview';
 import { TopicManager } from '@/components/teacher/TopicManager';
@@ -37,6 +38,8 @@ type QuestionBankType = {
   name: string;
   subject?: string | null;
   description?: string | null;
+  is_shared?: boolean | null;
+  teacher_id?: string | null;
   _count?: { questions: number };
 };
 
@@ -70,6 +73,8 @@ export default function QuestionsUI({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const { data: session } = useSession();
+  const sessionUserId = session?.user?.id;
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<QuestionType | null>(null);
@@ -303,6 +308,18 @@ export default function QuestionsUI({
     });
   };
 
+  const handleToggleShare = async (bankId: string, isShared: boolean) => {
+    startTransition(async () => {
+      try {
+        await toggleShareQuestionBank(bankId, isShared);
+        toast.success(`Question Bank ${isShared ? 'shared' : 'unshared'} successfully!`);
+        router.refresh();
+      } catch (e: any) {
+        toast.error(e.message || 'Failed to update sharing settings');
+      }
+    });
+  };
+
   const downloadSampleJSON = () => {
     window.open('/sample-questions.json', '_blank');
   };
@@ -434,11 +451,25 @@ export default function QuestionsUI({
                           isSelected ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground'
                         }`}
                       >
-                        <span className="truncate">{bank.name}</span>
+                        <span className="truncate flex items-center gap-1.5 min-w-0">
+                          <span className="truncate">{bank.name}</span>
+                          {bank.is_shared && <Share2 className="h-3 w-3 text-blue-500 shrink-0" />}
+                        </span>
                         <span className="text-[10px] opacity-75 ml-1">{bank._count?.questions ?? 0}</span>
                       </button>
 
                       <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                        {(!bank.teacher_id || bank.teacher_id === sessionUserId) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className={`h-6 w-6 p-0 ${bank.is_shared ? 'text-blue-500 hover:text-blue-700' : 'text-muted-foreground hover:text-foreground'}`}
+                            title={bank.is_shared ? 'Unshare Question Bank' : 'Share Question Bank with Tenant'}
+                            onClick={() => handleToggleShare(bank.id, !bank.is_shared)}
+                          >
+                            <Share2 className="h-3 w-3" />
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"

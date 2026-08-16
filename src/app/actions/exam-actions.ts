@@ -85,6 +85,7 @@ export async function createExam(data: FormData) {
         due_date: dueDate || undefined,
         target_branch: targetBranch,
         target_year: targetYear,
+        allow_calculator: data.get('allow_calculator') === 'true',
       },
       
       exam_sections: {

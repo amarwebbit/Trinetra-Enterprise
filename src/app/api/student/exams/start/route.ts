@@ -62,6 +62,7 @@ export async function POST(req: Request) {
       student_id: session.user.id,
       start_time: new Date(),
       status: 'in_progress',
+      attempt_number: completedAttemptsCount + 1,
     },
   });
   

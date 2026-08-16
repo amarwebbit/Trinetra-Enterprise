@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { prisma } from '@/lib/db/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
@@ -30,6 +31,7 @@ export default async function SuperTenantsPage() {
       banner_url: true,
       primary_color: true,
       secondary_color: true,
+      font_family: true,
       _count: {
         select: {
           users: {
@@ -60,19 +62,22 @@ export default async function SuperTenantsPage() {
     banner_url: t.banner_url,
     primary_color: t.primary_color,
     secondary_color: t.secondary_color,
+    font_family: t.font_family,
   }));
   
   return (
-    <TenantsUI 
-      tenants={mappedTenants}
-      // Pass server actions
-      createTenant={createTenant}
-      updateTenant={updateTenant}
-      suspendTenant={suspendTenant}
-      activateTenant={activateTenant}
-      deleteTenant={deleteTenant}
-      uploadTenantImage={uploadTenantImage}
-      updateTenantColor={updateTenantColor}
-    />
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground animate-pulse">Loading Tenant Directory...</div>}>
+      <TenantsUI 
+        tenants={mappedTenants}
+        // Pass server actions
+        createTenant={createTenant}
+        updateTenant={updateTenant}
+        suspendTenant={suspendTenant}
+        activateTenant={activateTenant}
+        deleteTenant={deleteTenant}
+        uploadTenantImage={uploadTenantImage}
+        updateTenantColor={updateTenantColor}
+      />
+    </Suspense>
   );
 }

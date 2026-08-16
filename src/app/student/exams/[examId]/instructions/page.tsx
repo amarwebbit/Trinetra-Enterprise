@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { notFound, redirect } from 'next/navigation';
 import { InstructionsUI } from './InstructionsUI';
 import { WaitingRoomUI } from './WaitingRoomUI';
@@ -14,15 +13,15 @@ export default async function ExamInstructionsPage(
   }
 ) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
+  const actor = await getExamActor();
 
-  if (!session || !['student', 'admin', 'super_admin'].includes(session.user.role)) {
+  if (!actor) {
     redirect('/login');
   }
 
   const { examId } = params;
-  const studentId = session.user.id;
-  const tenantId = (session.user.tenantId || (session.user as any).tenant_id || '') as string;
+  const studentId = actor.studentId;
+  const tenantId = actor.tenantId;
 
   // Fetch exam with all required data - REAL data only
   const dbExam = await prisma.exams.findFirst({

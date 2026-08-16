@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 import { createExam } from '@/app/actions/exam-actions';
 import { getQuestionsByBank } from '@/app/actions/question-actions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -111,6 +112,7 @@ export default function ExamBuilderUI({
     // Navigation
     shuffle_questions: true,
     shuffle_options: true,
+    allow_calculator: false,
   });
 
   // Watch for Pattern changes (GATE Auto-config)
@@ -265,6 +267,38 @@ export default function ExamBuilderUI({
     });
   };
 
+  const handleSelectAllToggle = () => {
+    setFormData(prev => {
+      const updatedSections = [...prev.sections];
+      const activeSec = updatedSections[selectedSectionIdx];
+      if (!activeSec) return prev;
+
+      const visibleQuestions = bankQuestions.filter(
+        (q) => selectedTopicFilter ? q.topic_id === selectedTopicFilter : true
+      );
+      
+      const allSelected = visibleQuestions.every(
+        (q) => activeSec.question_ids.includes(q.id)
+      );
+
+      let newIds = [...activeSec.question_ids];
+      if (allSelected) {
+        const visibleIds = new Set(visibleQuestions.map(q => q.id));
+        newIds = newIds.filter(id => !visibleIds.has(id));
+      } else {
+        const unionSet = new Set([...newIds, ...visibleQuestions.map(q => q.id)]);
+        newIds = Array.from(unionSet);
+      }
+
+      updatedSections[selectedSectionIdx] = {
+        ...activeSec,
+        question_ids: newIds,
+      };
+
+      return { ...prev, sections: updatedSections };
+    });
+  };
+
   const selectedMarks = formData.sections.reduce((total, section) => total + (section.question_ids || []).reduce((sectionTotal: number, questionId: string) => {
     const question = bankQuestions.find((item) => item.id === questionId);
     return sectionTotal + Number(question?.marks ?? 1);
@@ -329,6 +363,7 @@ export default function ExamBuilderUI({
 
         data.append('shuffle_questions', String(formData.shuffle_questions));
         data.append('shuffle_options', String(formData.shuffle_options));
+        data.append('allow_calculator', String(formData.allow_calculator));
 
         data.append('sections', JSON.stringify(formData.sections));
 
@@ -336,7 +371,7 @@ export default function ExamBuilderUI({
 
         toast.success(action === 'publish' ? 'Exam published successfully!' : 'Exam saved as draft.');
         
-        if (action === 'publish' && res?.examId) {
+        if (action === 'publish' && res?.examId && formData.mode !== 'assignment') {
           try {
             const inviteRes = await fetch('/api/teacher/exams/invite/generate', {
               method: 'POST',
@@ -363,11 +398,15 @@ export default function ExamBuilderUI({
     });
   };
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(inviteLink);
-    setCopied(true);
-    toast.success('Invite link copied to clipboard!');
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyLink = async () => {
+    const success = await copyToClipboard(inviteLink);
+    if (success) {
+      setCopied(true);
+      toast.success('Invite link copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      toast.error('Failed to copy invite link to clipboard');
+    }
   };
 
   return (
@@ -724,7 +763,23 @@ export default function ExamBuilderUI({
                         </div>
                       </div>
                       <div className="col-span-1 md:col-span-3">
-                        <div className="border border-muted divide-y divide-muted max-h-[600px] overflow-y-auto bg-card">
+                        <div className="border border-muted divide-y divide-muted max-h-[600px] overflow-y-auto bg-card flex flex-col">
+                          {bankQuestions.filter((q) => selectedTopicFilter ? q.topic_id === selectedTopicFilter : true).length > 0 && (
+                            <div 
+                              onClick={handleSelectAllToggle}
+                              className="p-4 flex gap-3 items-center cursor-pointer transition-colors bg-muted/20 border-b border-muted hover:bg-muted/30 select-none shrink-0"
+                            >
+                              <Checkbox 
+                                checked={
+                                  bankQuestions
+                                    .filter((q) => selectedTopicFilter ? q.topic_id === selectedTopicFilter : true)
+                                    .every((q) => formData.sections[selectedSectionIdx]?.question_ids.includes(q.id))
+                                }
+                                onCheckedChange={handleSelectAllToggle}
+                              />
+                              <span className="text-xs font-bold text-foreground">Select All ({bankQuestions.filter((q) => selectedTopicFilter ? q.topic_id === selectedTopicFilter : true).length} questions)</span>
+                            </div>
+                          )}
                           {bankQuestions
                             .filter((q) => selectedTopicFilter ? q.topic_id === selectedTopicFilter : true)
                             .map((q) => {
@@ -993,6 +1048,14 @@ export default function ExamBuilderUI({
           onCheckedChange={(c) => setFormData(prev => ({ ...prev, shuffle_options: !!c }))}
         />
         <Label htmlFor="shuff_opt" className="cursor-pointer">Shuffle Options</Label>
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="allow_calc"
+          checked={formData.allow_calculator}
+          onCheckedChange={(c) => setFormData(prev => ({ ...prev, allow_calculator: !!c }))}
+        />
+        <Label htmlFor="allow_calc" className="cursor-pointer">Enable Scientific Calculator</Label>
       </div>
     </div>
   </div>

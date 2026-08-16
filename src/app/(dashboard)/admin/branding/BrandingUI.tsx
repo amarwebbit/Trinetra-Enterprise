@@ -196,6 +196,14 @@ export default function BrandingUI({ tenant }: { tenant: TenantProps }) {
                   <option value="Roboto">Roboto</option>
                   <option value="Outfit">Outfit</option>
                   <option value="Montserrat">Montserrat</option>
+                  <option value="Poppins">Poppins</option>
+                  <option value="Lato">Lato</option>
+                  <option value="Playfair Display">Playfair Display</option>
+                  <option value="Merriweather">Merriweather</option>
+                  <option value="Space Grotesk">Space Grotesk</option>
+                  <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+                  <option value="Lora">Lora</option>
+                  <option value="Fira Code">Fira Code</option>
                 </select>
               </div>
               <div className="space-y-2">

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/options';
 import { revalidatePath } from 'next/cache';
+import { evaluateAttempt } from '@/lib/evaluation';
 
 function getTenantId(session: any) {
   return session?.user?.tenantId || session?.user?.tenant_id;
@@ -27,14 +28,7 @@ export async function forceSubmit(attemptId: string) {
     throw new Error('Attempt not found or unauthorized');
   }
 
-  await prisma.exam_attempts.update({
-    where: { id: attemptId },
-    data: { 
-      status: 'force_submitted',
-      end_time: new Date(),
-      updated_at: new Date(),
-    }
-  });
+  await evaluateAttempt(attemptId, 'auto_submitted');
 
   try {
     await prisma.proctoring_logs.create({
@@ -79,18 +73,22 @@ export async function endExam(examId: string) {
     }
   });
 
-  // Force submit all in_progress attempts for this exam immediately
-  await prisma.exam_attempts.updateMany({
+  // Force submit and grade all in_progress attempts for this exam immediately
+  const inProgressAttempts = await prisma.exam_attempts.findMany({
     where: {
       exam_id: examId,
       status: 'in_progress'
     },
-    data: {
-      status: 'force_submitted',
-      end_time: new Date(),
-      updated_at: new Date()
-    }
+    select: { id: true }
   });
+
+  for (const att of inProgressAttempts) {
+    try {
+      await evaluateAttempt(att.id, 'auto_submitted');
+    } catch (err) {
+      console.error(`Failed to evaluate auto-submitted attempt ${att.id}:`, err);
+    }
+  }
 
   await prisma.audit_logs.create({
     data: {
@@ -160,4 +158,133 @@ export async function sendMessage(examId: string, messageText: string) {
   });
 
   return { success: true, count: notificationsData.length };
+}
+
+export async function adjustAttemptTime(attemptId: string, adjustmentMinutes: number) {
+  const session = await getServerSession(authOptions);
+  if (!session || !['admin', 'teacher', 'super_admin'].includes(session.user.role)) {
+    throw new Error('Unauthorized');
+  }
+
+  const tenantId = getTenantId(session);
+
+  // Verify the attempt exists
+  const attempt = await prisma.exam_attempts.findFirst({
+    where: { id: attemptId },
+    include: { users: true }
+  });
+
+  if (!attempt || attempt.users?.tenant_id !== tenantId) {
+    throw new Error('Attempt not found or unauthorized');
+  }
+
+  const currentMetadata = attempt.metadata as any || {};
+  const currentAdjustmentSeconds = Number(currentMetadata.time_adjustment_seconds || 0);
+  const newAdjustmentSeconds = currentAdjustmentSeconds + (adjustmentMinutes * 60);
+
+  // Update metadata
+  await prisma.exam_attempts.update({
+    where: { id: attemptId },
+    data: {
+      metadata: {
+        ...currentMetadata,
+        time_adjustment_seconds: newAdjustmentSeconds,
+      }
+    }
+  });
+
+  // Audit log
+  await prisma.audit_logs.create({
+    data: {
+      tenant_id: tenantId,
+      user_id: session.user.id,
+      action: `EXAM_TIME_ADJUSTED: ${adjustmentMinutes > 0 ? '+' : ''}${adjustmentMinutes} minutes`,
+      resource_type: 'exam_attempts',
+      resource_id: attemptId,
+      new_values: { time_adjustment_seconds: newAdjustmentSeconds },
+    }
+  });
+
+  revalidatePath('/admin/live');
+  revalidatePath('/teacher/live');
+  return { success: true, newAdjustmentSeconds };
+}
+
+export async function resumeAttempt(attemptId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session || !['admin', 'teacher', 'super_admin'].includes(session.user.role)) {
+    throw new Error('Unauthorized');
+  }
+
+  const tenantId = getTenantId(session);
+
+  // Verify attempt belongs to tenant
+  const attempt = await prisma.exam_attempts.findFirst({
+    where: { id: attemptId },
+    include: { users: true }
+  });
+
+  if (!attempt || attempt.users?.tenant_id !== tenantId) {
+    throw new Error('Attempt not found or unauthorized');
+  }
+
+  await prisma.exam_attempts.update({
+    where: { id: attemptId },
+    data: {
+      status: 'in_progress',
+      end_time: null, // Allow system to calculate end time
+    }
+  });
+
+  // Audit log
+  await prisma.audit_logs.create({
+    data: {
+      tenant_id: tenantId,
+      user_id: session.user.id,
+      action: 'EXAM_ATTEMPT_RESUMED',
+      resource_type: 'exam_attempts',
+      resource_id: attemptId,
+    }
+  });
+
+  revalidatePath('/teacher/live');
+  return { success: true };
+}
+
+export async function resetAttempt(attemptId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session || !['admin', 'teacher', 'super_admin'].includes(session.user.role)) {
+    throw new Error('Unauthorized');
+  }
+
+  const tenantId = getTenantId(session);
+
+  // Verify attempt belongs to tenant
+  const attempt = await prisma.exam_attempts.findFirst({
+    where: { id: attemptId },
+    include: { users: true }
+  });
+
+  if (!attempt || attempt.users?.tenant_id !== tenantId) {
+    throw new Error('Attempt not found or unauthorized');
+  }
+
+  // Delete attempt record (cascading automatically)
+  await prisma.exam_attempts.delete({
+    where: { id: attemptId },
+  });
+
+  // Audit log
+  await prisma.audit_logs.create({
+    data: {
+      tenant_id: tenantId,
+      user_id: session.user.id,
+      action: 'EXAM_ATTEMPT_RESET',
+      resource_type: 'exam_attempts',
+      resource_id: attemptId,
+    }
+  });
+
+  revalidatePath('/teacher/live');
+  return { success: true };
 }

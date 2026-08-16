@@ -32,7 +32,6 @@ export default function AuditLogsUI({
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
   const totalPages = Math.ceil(total / pageSize);
-
   const handleFilterChange = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value && value !== 'all') {
@@ -40,12 +39,13 @@ export default function AuditLogsUI({
     } else {
       params.delete(key);
     }
-    params.set('page', '1'); // Reset to page 1 on filter
+    if (key !== 'page') {
+      params.set('page', '1'); // Reset to page 1 on filter
+    }
     startTransition(() => {
       router.push(`/super/audit-logs?${params.toString()}`);
     });
   };
-
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);

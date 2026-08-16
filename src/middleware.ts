@@ -40,7 +40,10 @@ export async function middleware(req: NextRequest) {
   // 3. Define route classification
   const isAuthRoute = path.startsWith('/login') || path.startsWith('/register');
   const isApiRoute = path.startsWith('/api');
-  const isGuestExamRoute = /^\/student\/exams\/[^/]+\/(invite|instructions|take)(\/|$)/.test(path) || /^\/exam\/complete\/[^/]+$/.test(path);
+  const isGuestExamRoute = 
+    /^\/student\/exams\/[^/]+\/(invite|instructions|take)(\/|$)/.test(path) || 
+    /^\/student\/results\/[^/]+$/.test(path) ||
+    /^\/exam\/complete\/[^/]+$/.test(path);
   const isDashboardRoute = 
     path.startsWith('/super') || 
     path.startsWith('/admin') || 

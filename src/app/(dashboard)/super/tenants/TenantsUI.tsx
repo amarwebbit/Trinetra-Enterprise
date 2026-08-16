@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { formatDateForHydration } from '@/lib/utils/date';
 import { 
   Plus, Search, Filter, MoreVertical, ShieldAlert,
@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/utils/clipboard';
+import { useSearchParams } from 'next/navigation';
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,6 +38,7 @@ type TenantData = {
   name_image_url?: string | null;
   primary_color: string | null;
   secondary_color: string | null;
+  font_family: string | null;
 };
 
 // Props definition
@@ -81,6 +84,15 @@ export default function TenantsUI({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
   const [planFilter, setPlanFilter] = useState<'all' | 'starter' | 'pro' | 'enterprise'>('all');
+  
+  const searchParams = useSearchParams();
+  const shouldOpenCreate = searchParams.get('create') === 'true';
+
+  useEffect(() => {
+    if (shouldOpenCreate) {
+      setIsCreateModalOpen(true);
+    }
+  }, [shouldOpenCreate]);
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -439,11 +451,14 @@ export default function TenantsUI({
                   Close
                 </Button>
                 <Button
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      `Institution: ${createdTenant.name}\nLogin URL: https://${createdTenant.slug}.localhost/login\nEmail: ${createdTenant.adminEmail}\nPassword: ${createdTenant.temporaryPassword}`
-                    );
-                    toast.success('Credentials copied to clipboard!');
+                  onClick={async () => {
+                    const text = `Institution: ${createdTenant.name}\nLogin URL: https://${createdTenant.slug}.localhost/login\nEmail: ${createdTenant.adminEmail}\nPassword: ${createdTenant.temporaryPassword}`;
+                    const success = await copyToClipboard(text);
+                    if (success) {
+                      toast.success('Credentials copied to clipboard!');
+                    } else {
+                      toast.error('Failed to copy credentials to clipboard');
+                    }
                   }}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-none text-xs"
                 >
@@ -599,6 +614,29 @@ export default function TenantsUI({
                     />
                   </div>
                 </div>
+              </div>
+              
+              {/* Font Family Selection */}
+              <div className="space-y-2 mt-4">
+                <label className="block text-sm font-medium text-foreground">Font Family</label>
+                <select
+                  value={selectedTenant.font_family || 'Inter'}
+                  onChange={(e) => handleColorChange('font_family', e.target.value)}
+                  className="w-full bg-background border border-muted p-2 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="Inter">Inter</option>
+                  <option value="Roboto">Roboto</option>
+                  <option value="Outfit">Outfit</option>
+                  <option value="Montserrat">Montserrat</option>
+                  <option value="Poppins">Poppins</option>
+                  <option value="Lato">Lato</option>
+                  <option value="Playfair Display">Playfair Display</option>
+                  <option value="Merriweather">Merriweather</option>
+                  <option value="Space Grotesk">Space Grotesk</option>
+                  <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+                  <option value="Lora">Lora</option>
+                  <option value="Fira Code">Fira Code</option>
+                </select>
               </div>
             </div>
 

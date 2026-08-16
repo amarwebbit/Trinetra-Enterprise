@@ -26,8 +26,11 @@ export default async function StudentResultsPage(
   // Build where clause - ONLY SHOW COMPLETED EXAMS
   const where: any = {
     student_id: studentId,
-    status: { in: ['submitted', 'evaluated'] },
-    exams: { end_time: { lt: new Date() } },
+    status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] },
+    OR: [
+      { exams: { end_time: { lt: new Date() } } },
+      { exams: { show_results_immediately: true } }
+    ]
   };
 
   // Fetch results - REAL data
@@ -57,8 +60,11 @@ export default async function StudentResultsPage(
     prisma.exam_attempts.aggregate({
       where: { 
         student_id: studentId, 
-        status: { in: ['submitted', 'evaluated'] },
-        exams: { end_time: { lt: new Date() } }
+        status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] },
+        OR: [
+          { exams: { end_time: { lt: new Date() } } },
+          { exams: { show_results_immediately: true } }
+        ]
       },
       _avg: { percentage: true },
       _count: true,

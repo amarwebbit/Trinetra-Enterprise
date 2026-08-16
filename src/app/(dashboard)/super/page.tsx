@@ -207,7 +207,7 @@ export default async function SuperAdminDashboard() {
             <CardDescription className="text-xs">Navigate to critical platform control tools</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            <Link href="/super/tenants/new" className="w-full block">
+            <Link href="/super/tenants?create=true" className="w-full block">
               <Button className="w-full justify-between bg-primary hover:bg-primary/95 text-primary-foreground font-semibold py-2.5 rounded-none">
                 <span>Create New Tenant</span>
                 <ChevronRight className="h-4 w-4" />
@@ -221,7 +221,7 @@ export default async function SuperAdminDashboard() {
               </Button>
             </Link>
 
-            <Link href="/super/modules" className="w-full block">
+            <Link href="/super/billing" className="w-full block">
               <Button variant="outline" className="w-full justify-between border-muted text-foreground font-semibold py-2.5 rounded-none">
                 <span>Configure Modules & Billing</span>
                 <ChevronRight className="h-4 w-4" />

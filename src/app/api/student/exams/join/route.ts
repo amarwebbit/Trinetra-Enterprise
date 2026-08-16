@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import bcrypt from 'bcrypt';
 import { createExamGuestToken, EXAM_GUEST_COOKIE } from '@/lib/auth/exam-guest';
+import { withExamRateLimit } from '@/lib/redis/with-rate-limit';
 
-export async function POST(req: NextRequest) {
+async function joinHandler(req: NextRequest) {
   try {
     const { examId, token, rollNumber, studentName, email, branch, section } = await req.json();
 
@@ -167,3 +168,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to join exam' }, { status: 500 });
   }
 }
+
+export const POST = withExamRateLimit(joinHandler);

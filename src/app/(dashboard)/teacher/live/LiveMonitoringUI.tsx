@@ -20,8 +20,11 @@ import {
   ChevronDown,
   Calendar,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  RotateCcw,
+  Trash2
 } from 'lucide-react';
+import { forceSubmit, adjustAttemptTime, resumeAttempt, resetAttempt } from '@/app/actions/live-actions';
 
 interface LiveStudent {
   id: string;
@@ -118,18 +121,9 @@ export const LiveMonitoringUI: React.FC<LiveMonitoringUIProps> = ({
     if (!confirm(`Are you sure you want to force submit ${studentName}'s exam?`)) return;
 
     try {
-      const response = await fetch('/api/teacher/live/force-submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          attemptId: studentId,
-          examId: selectedExamId || students.find(s => s.id === studentId)?.examId
-        }),
-      });
+      const result = await forceSubmit(studentId);
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (result?.success) {
         toast.success(`${studentName}'s exam submitted successfully`);
         setStudents(prev => 
           prev.map(s => 
@@ -138,13 +132,76 @@ export const LiveMonitoringUI: React.FC<LiveMonitoringUIProps> = ({
               : s
           )
         );
-        router.refresh();
       } else {
-        toast.error(data.error || 'Failed to force submit');
+        toast.error('Failed to force submit');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Force submit error:', error);
-      toast.error('Failed to force submit');
+      toast.error(error.message || 'Failed to force submit');
+    }
+  };
+
+  const handleAdjustTime = async (studentId: string, studentName: string) => {
+    const amountStr = prompt(`Enter number of minutes to add or subtract for ${studentName} (e.g., 10 to add, -5 to subtract):`);
+    if (amountStr === null) return;
+    
+    const minutes = parseInt(amountStr);
+    if (isNaN(minutes) || minutes === 0) {
+      toast.error('Please enter a valid non-zero number of minutes');
+      return;
+    }
+
+    try {
+      const result = await adjustAttemptTime(studentId, minutes);
+      if (result?.success) {
+        toast.success(`Adjusted ${studentName}'s exam time by ${minutes} minutes successfully.`);
+      } else {
+        toast.error('Failed to adjust exam time');
+      }
+    } catch (error: any) {
+      console.error('Adjust time error:', error);
+      toast.error(error.message || 'Failed to adjust exam time');
+    }
+  };
+
+  const handleResumeAttempt = async (studentId: string, studentName: string) => {
+    if (!confirm(`Are you sure you want to allow ${studentName} to resume their exam? This changes their status back to in_progress and clears their end timestamp.`)) return;
+
+    try {
+      const result = await resumeAttempt(studentId);
+      if (result?.success) {
+        toast.success(`Exam attempt for ${studentName} is now re-opened.`);
+        setStudents(prev => 
+          prev.map(s => 
+            s.id === studentId 
+              ? { ...s, status: 'in_progress' as const }
+              : s
+          )
+        );
+      } else {
+        toast.error('Failed to resume exam attempt');
+      }
+    } catch (error: any) {
+      console.error('Resume attempt error:', error);
+      toast.error(error.message || 'Failed to resume exam attempt');
+    }
+  };
+
+  const handleResetAttempt = async (studentId: string, studentName: string) => {
+    if (!confirm(`CRITICAL WARNING: This will delete ${studentName}'s current attempt AND all their submitted answers. They will have to start the exam completely fresh from the beginning. Do you want to proceed?`)) return;
+
+    try {
+      const result = await resetAttempt(studentId);
+      if (result?.success) {
+        toast.success(`Exam attempt for ${studentName} has been completely reset.`);
+        // Remove from current live list so they can restart fresh
+        setStudents(prev => prev.filter(s => s.id !== studentId));
+      } else {
+        toast.error('Failed to reset exam attempt');
+      }
+    } catch (error: any) {
+      console.error('Reset attempt error:', error);
+      toast.error(error.message || 'Failed to reset exam attempt');
     }
   };
 
@@ -187,81 +244,83 @@ export const LiveMonitoringUI: React.FC<LiveMonitoringUIProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Filters for Admin */}
-      {userRole === 'admin' && (
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Filter className="h-5 w-5 text-gray-500" />
-              <h3 className="font-medium">Filters</h3>
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="text-sm text-blue-600 hover:text-blue-700"
-            >
-              {showFilters ? 'Hide Filters' : 'Show Filters'}
-            </button>
+      {/* Filters Card */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Filter className="h-5 w-5 text-gray-500" />
+            <h3 className="font-medium">Filters</h3>
           </div>
-          
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Exam
-                </label>
-                <select
-                  value={selectedExamId || ''}
-                  onChange={(e) => setSelectedExamId(e.target.value || undefined)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Exams</option>
-                  {availableExams.map((exam) => (
-                    <option key={exam.id} value={exam.id}>
-                      {exam.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Teacher
-                </label>
-                <select
-                  value={selectedTeacher}
-                  onChange={(e) => setSelectedTeacher(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">All Teachers</option>
-                  {availableTeachers.map((teacher) => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Department
-                </label>
-                <select
-                  value={selectedDepartment}
-                  onChange={(e) => setSelectedDepartment(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">All Departments</option>
-                  {availableDepartments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="text-sm text-blue-600 hover:text-blue-700"
+          >
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </button>
         </div>
-      )}
+        
+        {showFilters && (
+          <div className={`grid grid-cols-1 ${userRole === 'admin' ? 'md:grid-cols-3' : 'md:grid-cols-1'} gap-4 mt-4`}>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Exam
+              </label>
+              <select
+                value={selectedExamId || ''}
+                onChange={(e) => setSelectedExamId(e.target.value || undefined)}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Exams</option>
+                {availableExams.map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    {exam.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {userRole === 'admin' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Teacher
+                  </label>
+                  <select
+                    value={selectedTeacher}
+                    onChange={(e) => setSelectedTeacher(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Teachers</option>
+                    {availableTeachers.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Department
+                  </label>
+                  <select
+                    value={selectedDepartment}
+                    onChange={(e) => setSelectedDepartment(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Departments</option>
+                    {availableDepartments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Stats Dashboard */}
       <div className={`grid grid-cols-2 md:grid-cols-4 gap-4`}>
@@ -473,13 +532,40 @@ export const LiveMonitoringUI: React.FC<LiveMonitoringUIProps> = ({
                           <Eye className="h-4 w-4" />
                         </button>
                         {student.status === 'in_progress' && (
-                          <button
-                            onClick={() => handleForceSubmit(student.id, student.studentName)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Force Submit"
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleAdjustTime(student.id, student.studentName)}
+                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                              title="Adjust Time"
+                            >
+                              <Clock className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleForceSubmit(student.id, student.studentName)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Force Submit"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        {student.status !== 'in_progress' && (
+                          <>
+                            <button
+                              onClick={() => handleResumeAttempt(student.id, student.studentName)}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Resume Attempt"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleResetAttempt(student.id, student.studentName)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Reset / Start Fresh"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

@@ -1,3 +1,4 @@
+import '@/lib/env-validator';
 import React from 'react';
 import type { Metadata } from 'next';
 import './globals.css';
@@ -54,10 +55,17 @@ export default async function RootLayout({
           <link rel="icon" href={whiteLabelConfig.faviconUrl} />
         )}
         {whiteLabelConfig?.fontFamily && (
-          <link 
-            href={`https://fonts.googleapis.com/css2?family=${whiteLabelConfig.fontFamily.replace(/ /g, '+')}&display=swap`} 
-            rel="stylesheet" 
-          />
+          <>
+            <link 
+              href={`https://fonts.googleapis.com/css2?family=${whiteLabelConfig.fontFamily.replace(/ /g, '+')}&display=swap`} 
+              rel="stylesheet" 
+            />
+            <style dangerouslySetInnerHTML={{ __html: `
+              body, button, input, select, textarea, [class*="font-sans"], .font-sans {
+                font-family: '${whiteLabelConfig.fontFamily}', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+              }
+            `}} />
+          </>
         )}
         <script
           dangerouslySetInnerHTML={{

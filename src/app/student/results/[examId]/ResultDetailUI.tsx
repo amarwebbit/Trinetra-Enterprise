@@ -190,20 +190,12 @@ export function ResultDetailUI({
                 </div>
                 
                 <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => window.open(`/api/student/results/download/pdf?examId=${attempt.exam_id}`)}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-lg font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
-                    >
-                      <span>📄</span> PDF Report
-                    </button>
-                    <button
-                      onClick={() => window.open(`/api/student/results/download/excel?examId=${attempt.exam_id}`)}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-lg font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors text-sm"
-                    >
-                      <span>📊</span> Excel Data
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => window.open(`/api/student/results/download/pdf?examId=${attempt.exam_id}`)}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-lg font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
+                  >
+                    <span>📄</span> PDF Report
+                  </button>
                 </div>
               </div>
             </div>

@@ -69,7 +69,9 @@ export async function GET(
         0
       );
       
-      const answeredQuestions = attempt.answers.length;
+      const answeredQuestions = attempt.answers.filter(
+        (a: any) => a.answer_text && a.answer_text.trim() !== ''
+      ).length;
       
       // Total security violation logs
       const violations = attempt.proctoring_logs.length;

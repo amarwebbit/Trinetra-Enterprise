@@ -77,6 +77,8 @@ function validateEnvVariables() {
 // Run validation on module load
 validateEnvVariables();
 
+const useSecure = process.env.NODE_ENV === 'production' && !!process.env.NEXTAUTH_URL?.startsWith('https');
+
 // ============================================
 // NextAuth Configuration
 // ============================================
@@ -204,15 +206,15 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
     error: '/login',
   },
-  useSecureCookies: process.env.NODE_ENV === 'production',
+  useSecureCookies: useSecure,
   cookies: {
     sessionToken: {
-      name: `next-auth.session-token`,
+      name: useSecure ? `__Secure-next-auth.session-token` : `next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: useSecure,
       },
     },
   },

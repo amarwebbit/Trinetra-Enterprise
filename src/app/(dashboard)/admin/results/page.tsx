@@ -48,7 +48,7 @@ export default async function AdminResultsPage(
       where: { id: selectedExamId, tenant_id: tenantId },
       include: {
         exam_attempts: {
-          where: { status: { in: ['submitted', 'evaluated', 'graded'] } },
+          where: { status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'] } },
           include: {
             users: {
               include: { departments_users_department_idTodepartments: true }

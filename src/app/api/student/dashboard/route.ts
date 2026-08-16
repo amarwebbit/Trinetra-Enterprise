@@ -37,6 +37,16 @@ export async function GET() {
         end_time: true,
         duration_minutes: true,
         total_marks: true,
+        users: {
+          select: {
+            full_name: true,
+          }
+        },
+        _count: {
+          select: {
+            exam_sections: true,
+          }
+        }
       },
       orderBy: { start_time: 'asc' },
       take: 10,
@@ -53,6 +63,10 @@ export async function GET() {
             id: true,
             title: true,
             total_marks: true,
+            passing_percentage: true,
+            show_results_immediately: true,
+            allow_multiple: true,
+            max_attempts: true,
           },
         },
       },
@@ -79,11 +93,20 @@ export async function GET() {
       return {
         id: attempt.id,
         exam_id: attempt.exam_id,
-        exam_title: attempt.exams?.title || 'Assessment',
         submitted_at: attempt.end_time || attempt.created_at,
         percentage,
         score,
         total_marks: total,
+        status: attempt.status,
+        is_best_attempt: attempt.is_best_attempt,
+        exams: attempt.exams ? {
+          title: attempt.exams.title,
+          total_marks: total,
+          passing_percentage: Number(attempt.exams.passing_percentage) || 40,
+          show_results_immediately: attempt.exams.show_results_immediately,
+          allow_multiple: attempt.exams.allow_multiple,
+          max_attempts: attempt.exams.max_attempts,
+        } : null,
       };
     });
 

@@ -97,35 +97,35 @@ FROM modules;
 -- ============================================
 -- 5. CREATE INDEXES FOR PERFORMANCE
 -- ============================================
-CREATE INDEX idx_users_tenant_id ON users(tenant_id);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_exams_tenant_id ON exams(tenant_id);
-CREATE INDEX idx_exams_start_end ON exams(start_time, end_time);
-CREATE INDEX idx_exam_attempts_student ON exam_attempts(student_id);
-CREATE INDEX idx_exam_attempts_exam ON exam_attempts(exam_id);
-CREATE INDEX idx_answers_attempt ON answers(attempt_id);
-CREATE INDEX idx_answers_question ON answers(question_id);
-CREATE INDEX idx_questions_bank ON questions(bank_id);
-CREATE INDEX idx_questions_topic ON questions(topic);
-CREATE INDEX idx_audit_logs_tenant ON audit_logs(tenant_id);
-CREATE INDEX idx_audit_logs_created ON audit_logs(created_at);
-CREATE INDEX idx_notifications_user ON notifications(user_id);
-CREATE INDEX idx_proctoring_logs_attempt ON proctoring_logs(attempt_id);
-CREATE INDEX idx_ai_analysis_exam ON ai_analysis(exam_id);
-CREATE INDEX idx_ai_analysis_student ON ai_analysis(student_id);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_exams_tenant_id ON exams(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_exams_start_end ON exams(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_exam_attempts_student ON exam_attempts(student_id);
+CREATE INDEX IF NOT EXISTS idx_exam_attempts_exam ON exam_attempts(exam_id);
+CREATE INDEX IF NOT EXISTS idx_answers_attempt ON answers(attempt_id);
+CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
+CREATE INDEX IF NOT EXISTS idx_questions_bank ON questions(bank_id);
+CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant ON audit_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_proctoring_logs_attempt ON proctoring_logs(attempt_id);
+CREATE INDEX IF NOT EXISTS idx_ai_analysis_exam ON ai_analysis(exam_id);
+CREATE INDEX IF NOT EXISTS idx_ai_analysis_student ON ai_analysis(student_id);
 
 -- ============================================
 -- 6. CREATE GIN INDEX FOR JSONB QUERIES
 -- ============================================
-CREATE INDEX idx_questions_metadata ON questions USING GIN(metadata);
-CREATE INDEX idx_exams_metadata ON exams USING GIN(metadata);
-CREATE INDEX idx_users_metadata ON users USING GIN(metadata);
+CREATE INDEX IF NOT EXISTS idx_questions_metadata ON questions USING GIN(metadata);
+CREATE INDEX IF NOT EXISTS idx_exams_metadata ON exams USING GIN(metadata);
+CREATE INDEX IF NOT EXISTS idx_users_metadata ON users USING GIN(metadata);
 
 -- ============================================
 -- 7. CREATE VECTOR INDEX FOR AI SIMILARITY SEARCH
 -- ============================================
-CREATE INDEX idx_questions_embedding ON questions 
+CREATE INDEX IF NOT EXISTS idx_questions_embedding ON questions 
 USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
 

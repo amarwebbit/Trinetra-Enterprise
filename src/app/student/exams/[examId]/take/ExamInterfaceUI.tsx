@@ -11,6 +11,7 @@ import katex from 'katex';
 import { useWhiteLabel } from '@/components/providers/WhiteLabelProvider';
 import { renderMath } from '@/components/ui/MathText';
 import { AestheticLoader } from '@/components/ui/AestheticLoader';
+import { useBatchSave } from '@/hooks/useBatchSave';
 
 function renderRichText(input: string) {
   if (!input) return { __html: '' };
@@ -75,17 +76,41 @@ export function ExamInterfaceUI({
   const lastViolationByEventRef = useRef<Record<string, number>>({});
   const isResumingRef = useRef<boolean>(false);
 
-  // Restore initial answers
+  // Restore initial answers and merge with local storage backup
   useEffect(() => {
+    let answersMap: Record<string, string> = {};
+    const markedMap: Record<string, boolean> = {};
+    
+    // 1. Load from DB initial answers
     if (initialAnswers && initialAnswers.length > 0) {
-      const answersMap: Record<string, string> = {};
       initialAnswers.forEach((ans) => {
-        answersMap[ans.question_id] = ans.answer_text;
+        answersMap[ans.question_id] = ans.answer_text || '';
+        if (ans.metadata && typeof ans.metadata === 'object') {
+          markedMap[ans.question_id] = !!(ans.metadata as any).marked_for_review;
+        }
       });
-      setUserAnswers(answersMap);
-      userAnswersRef.current = answersMap;
     }
-  }, [initialAnswers]);
+
+    // 2. Fallback to localStorage pending saves if any (Session Reconstruction)
+    try {
+      const pendingKey = `exam-pending-saves:${attempt.id}`;
+      const pendingStr = localStorage.getItem(pendingKey);
+      if (pendingStr) {
+        const pendingObj = JSON.parse(pendingStr);
+        if (pendingObj && pendingObj.answers) {
+          Object.entries(pendingObj.answers).forEach(([qId, ansText]) => {
+            answersMap[qId] = ansText as string;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to restore local storage cache:', e);
+    }
+
+    setUserAnswers(answersMap);
+    userAnswersRef.current = answersMap;
+    setMarkedForReview(markedMap);
+  }, [initialAnswers, attempt.id]);
 
   // Calculate remaining test duration dynamically based on attempt.start_time & test duration_minutes
   const calculateTimeLeft = useCallback(() => {
@@ -93,20 +118,24 @@ export function ExamInterfaceUI({
     const attemptStart = attempt.start_time ? new Date(attempt.start_time).getTime() : now;
     const durationMs = (exam.duration_minutes || 60) * 60 * 1000;
     
-    // Attempt duration ends at attemptStart + duration_minutes, capped by overall due_date/end_time
-    const examEndMs = exam.end_time ? new Date(exam.end_time).getTime() : attemptStart + durationMs;
-    const attemptEndMs = Math.min(attemptStart + durationMs, examEndMs);
+    // Read time adjustment from attempt metadata
+    const metadata = attempt.metadata as any || {};
+    const timeAdjustmentSeconds = Number(metadata.time_adjustment_seconds || 0);
+    const timeAdjustmentMs = timeAdjustmentSeconds * 1000;
+    
+    // Attempt duration ends at attemptStart + duration_minutes + adjustment
+    const examEndMs = exam.end_time ? new Date(exam.end_time).getTime() : attemptStart + durationMs + timeAdjustmentMs;
+    const attemptEndMs = Math.min(attemptStart + durationMs + timeAdjustmentMs, examEndMs);
     
     const diff = Math.floor((attemptEndMs - now) / 1000);
     return Math.max(0, diff);
-  }, [attempt.start_time, exam.duration_minutes, exam.end_time]);
+  }, [attempt.start_time, attempt.metadata, exam.duration_minutes, exam.end_time]);
 
   const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isOnline, setIsOnline] = useState(true);
-  const pendingKey = `exam-pending-saves:${attempt.id}`;
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [showCalculatorModal, setShowCalculatorModal] = useState(false);
   
@@ -120,6 +149,23 @@ export function ExamInterfaceUI({
 
   const isFullScreenRequired = exam?.full_screen_required !== false;
   const isDisableCopyPaste = exam?.disable_copy_paste !== false;
+
+  // Initialize Batch Save
+  const { 
+    enqueueAnswer, 
+    syncNow, 
+    isSaving, 
+    hasPendingChanges, 
+    queueSize, 
+    lastSyncTime 
+  } = useBatchSave(attempt.id, 5000);
+
+  // Update lastSaved state whenever a sync succeeds
+  useEffect(() => {
+    if (lastSyncTime) {
+      setLastSaved(lastSyncTime);
+    }
+  }, [lastSyncTime]);
 
   // Get violation settings from exam columns or metadata
   useEffect(() => {
@@ -150,6 +196,9 @@ export function ExamInterfaceUI({
       violationIntervalRef.current = null;
     }
 
+    // Force flush any pending answers in the queue before submitting
+    await syncNow();
+
     const currentAnswers = { ...userAnswersRef.current };
 
     for (let attemptCount = 0; attemptCount < 3; attemptCount++) {
@@ -170,15 +219,13 @@ export function ExamInterfaceUI({
       }
     }
 
-    localStorage.removeItem(pendingKey);
-
     if (document.exitFullscreen && document.fullscreenElement) {
       await document.exitFullscreen().catch(() => {});
     }
 
     // Hard replace browser history to prevent back navigation
     window.location.replace(`/student/results/${attempt.exam_id}`);
-  }, [attempt.id, attempt.exam_id, pendingKey]);
+  }, [attempt.id, attempt.exam_id, syncNow]);
 
   // Violation Timer Helpers
   const stopAutoSubmitTimer = useCallback(() => {
@@ -226,28 +273,35 @@ export function ExamInterfaceUI({
 
     lastViolationByEventRef.current[eventType] = now;
 
-    setViolationCount(prev => {
-      const newCount = prev + 1;
-      setShowViolationWarning(true);
+    fetch('/api/student/exams/proctoring', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        attemptId: attempt.id,
+        eventType,
+        clientTimestamp: new Date().toISOString(),
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.violationCount !== undefined) {
+          setViolationCount(data.violationCount);
+        }
 
-      fetch('/api/student/exams/proctoring', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attemptId: attempt.id,
-          eventType,
-          violationCount: newCount,
-          violationThreshold,
-          severity: newCount >= violationThreshold ? 'critical' : 'high',
-        }),
-      }).catch(console.error);
+        setShowViolationWarning(true);
 
-      // Always start auto-submit countdown timer so student sees countdown and auto-submits on 0s
-      startAutoSubmitTimer();
-
-      return newCount;
-    });
-  }, [attempt.id, violationThreshold, startAutoSubmitTimer, showViolationWarning]);
+        if (data.shouldSubmit) {
+          toast.error('Violation threshold reached. Auto-submitting exam...');
+          setTimeout(() => {
+            submitExam(true);
+          }, 2000);
+        } else {
+          // Always start auto-submit countdown timer so student sees countdown and auto-submits on 0s
+          startAutoSubmitTimer();
+        }
+      })
+      .catch(console.error);
+  }, [attempt.id, startAutoSubmitTimer, submitExam, showViolationWarning]);
 
   // Resume exam from violation modal
   const handleResumeExam = useCallback(async () => {
@@ -281,7 +335,11 @@ export function ExamInterfaceUI({
     if (violationIntervalRef.current) clearInterval(violationIntervalRef.current);
   }, []);
 
-  // Exam Duration Timer Countdown
+  const warned15Ref = useRef(false);
+  const warned5Ref = useRef(false);
+  const warned1Ref = useRef(false);
+
+  // Exam Duration Timer Countdown & Server time synchronization
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -290,92 +348,58 @@ export function ExamInterfaceUI({
           submitExam(true);
           return 0;
         }
+
+        // Time Alerts: check minutes remaining
+        const minutesLeft = Math.floor((prev - 1) / 60);
+        if (minutesLeft === 15 && !warned15Ref.current) {
+          warned15Ref.current = true;
+          toast.warning('Time Alert: 15 minutes remaining!', { duration: 6000 });
+        } else if (minutesLeft === 5 && !warned5Ref.current) {
+          warned5Ref.current = true;
+          toast.error('Only 5 minutes remaining! Please review your answers.', { duration: 8000 });
+        } else if (minutesLeft === 1 && !warned1Ref.current) {
+          warned1Ref.current = true;
+          toast.error('CRITICAL: Only 1 minute left before auto-submission!', { duration: 10000 });
+        }
+
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(timer);
-  }, [submitExam]);
 
-  // --- Save Progress (auto-save) ---
-  const saveAllAnswersRef = useRef<(() => Promise<void>) | null>(null);
-
-  const saveAllAnswers = async () => {
-    const payload = { attemptId: attempt.id, answers: userAnswers, markedForReview };
-    try {
-      const response = await fetch('/api/student/exams/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error('Save rejected');
-      localStorage.removeItem(pendingKey);
-      setLastSaved(new Date());
-    } catch (error) {
-      console.error('Auto-save failed:', error);
-      localStorage.setItem(pendingKey, JSON.stringify(payload));
-    }
-  };
-
-  saveAllAnswersRef.current = saveAllAnswers;
-
-  // Auto-save every 60 seconds
-  useEffect(() => {
-    const saveInterval = setInterval(() => {
-      if (saveAllAnswersRef.current) {
-        saveAllAnswersRef.current();
-      }
-    }, 60000);
-    return () => clearInterval(saveInterval);
-  }, []);
-
-  useEffect(() => {
-    const flushPendingSave = async () => {
-      setIsOnline(navigator.onLine);
-      const pending = localStorage.getItem(pendingKey);
-      if (!pending || !navigator.onLine) return;
-      try {
-        const response = await fetch('/api/student/exams/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: pending });
-        if (response.ok) { localStorage.removeItem(pendingKey); setLastSaved(new Date()); }
-      } catch { /* Retain the local outbox until the next reconnect. */ }
-    };
-    void flushPendingSave();
-    window.addEventListener('online', flushPendingSave);
-    window.addEventListener('offline', () => setIsOnline(false));
-    return () => window.removeEventListener('online', flushPendingSave);
-  }, [pendingKey]);
-
-  // --- Heartbeat Ping & Force Stop Check (every 5s) ---
-  useEffect(() => {
-    const heartbeatInterval = setInterval(() => {
+    // PERIODIC SYNC WITH SERVER-AUTHORITATIVE CLOCK (every 20s)
+    const serverTimeSync = setInterval(() => {
       if (isSubmittingRef.current) return;
-      fetch('/api/student/exams/proctoring', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attemptId: attempt.id,
-          eventType: 'heartbeat',
-          severity: 'low',
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.forceStopped || (data?.status && data.status !== 'in_progress')) {
-            if (isSubmittingRef.current) return;
-            isSubmittingRef.current = true;
-            setIsSubmitting(true);
-            toast.error('Your exam session was ended by the invigilator.', { duration: 5000 });
-            if (document.exitFullscreen && document.fullscreenElement) {
-              document.exitFullscreen().catch(() => {});
+      fetch(`/api/student/exams/attempt/${attempt.id}/remaining-time`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.remainingSeconds !== undefined) {
+            setTimeLeft(data.remainingSeconds);
+            if (!data.isValid) {
+              submitExam(true);
             }
-            setTimeout(() => {
-              window.location.replace(`/student/results/${attempt.exam_id}`);
-            }, 800);
           }
         })
         .catch(console.error);
-    }, 5000);
-    return () => clearInterval(heartbeatInterval);
-  }, [attempt.id, attempt.exam_id]);
+    }, 20000);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(serverTimeSync);
+    };
+  }, [attempt.id, submitExam]);
+
+  // Handle network online/offline listeners
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOnline(navigator.onLine);
+    };
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, []);
 
   // --- Tab Switch & Window Blur Detection ---
   useEffect(() => {
@@ -438,15 +462,18 @@ export function ExamInterfaceUI({
       const isShift = e.shiftKey;
       const key = e.key.toLowerCase();
 
-      if (
+      const isSystemProhibited =
         e.key === 'F12' ||
         e.key === 'F11' ||
         e.key === 'PrintScreen' ||
         e.key === 'Meta' ||
         (e.altKey && e.key === 'Tab') ||
-        (isCtrl && isShift && (key === 'i' || key === 'j' || key === 'c')) ||
-        (isCtrl && (key === 'c' || key === 'v' || key === 'x' || key === 'p' || key === 'u' || key === 's' || key === 'a'))
-      ) {
+        (isCtrl && isShift && (key === 'i' || key === 'j' || key === 'c'));
+
+      const isCopyPasteShortcut =
+        isCtrl && (key === 'c' || key === 'v' || key === 'x' || key === 'p' || key === 'u' || key === 's' || key === 'a');
+
+      if (isSystemProhibited || (isDisableCopyPaste && isCopyPasteShortcut)) {
         e.preventDefault();
         e.stopPropagation();
         triggerSecurityViolation('keyboard_shortcut');
@@ -460,20 +487,25 @@ export function ExamInterfaceUI({
 
     window.addEventListener('keydown', handleKeySecurity, true);
     window.addEventListener('contextmenu', blockEvent, true);
-    document.addEventListener('copy', blockEvent, true);
-    document.addEventListener('cut', blockEvent, true);
-    document.addEventListener('paste', blockEvent, true);
-    document.addEventListener('dragstart', blockEvent, true);
+    
+    if (isDisableCopyPaste) {
+      document.addEventListener('copy', blockEvent, true);
+      document.addEventListener('cut', blockEvent, true);
+      document.addEventListener('paste', blockEvent, true);
+      document.addEventListener('dragstart', blockEvent, true);
+    }
 
     return () => {
       window.removeEventListener('keydown', handleKeySecurity, true);
       window.removeEventListener('contextmenu', blockEvent, true);
-      document.removeEventListener('copy', blockEvent, true);
-      document.removeEventListener('cut', blockEvent, true);
-      document.removeEventListener('paste', blockEvent, true);
-      document.removeEventListener('dragstart', blockEvent, true);
+      if (isDisableCopyPaste) {
+        document.removeEventListener('copy', blockEvent, true);
+        document.removeEventListener('cut', blockEvent, true);
+        document.removeEventListener('paste', blockEvent, true);
+        document.removeEventListener('dragstart', blockEvent, true);
+      }
     };
-  }, [triggerSecurityViolation]);
+  }, [triggerSecurityViolation, isDisableCopyPaste]);
 
   // Beforeunload Warning Handler (Prevent Accidental Tab Close / Refresh)
   useEffect(() => {
@@ -502,27 +534,14 @@ export function ExamInterfaceUI({
     };
   }, [triggerSecurityViolation]);
   
-  // Handle individual answer save
+  // Handle individual answer save - enqueues for batch saving
   const saveAnswer = async (questionId: string, answerText: string) => {
-    try {
-      const response = await fetch('/api/student/exams/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attemptId: attempt.id,
-          questionId,
-          answerText,
-        }),
-      });
-      
-      if (response.ok) {
-        setLastSaved(new Date());
-      }
-    } catch (error) {
-      console.error('Failed to save answer:', error);
-      const pending = JSON.parse(localStorage.getItem(pendingKey) || '{}');
-      localStorage.setItem(pendingKey, JSON.stringify({ ...pending, attemptId: attempt.id, answers: { ...(pending.answers || {}), [questionId]: answerText } }));
-    }
+    enqueueAnswer({
+      questionId,
+      selectedOption: answerText || null,
+      markedForReview: markedForReview[questionId] || false,
+      timeSpent: 0,
+    });
   };
 
   // Handle answer change
@@ -533,7 +552,6 @@ export function ExamInterfaceUI({
       return updated;
     });
     
-    // Save to database immediately
     saveAnswer(questionId, value);
   };
 
@@ -546,33 +564,49 @@ export function ExamInterfaceUI({
       return updated;
     });
 
-    setMarkedForReview((prev) => ({
-      ...prev,
-      [questionId]: false,
-    }));
-
-    saveAnswer(questionId, '');
+    setMarkedForReview((prev) => {
+      const updated = { ...prev, [questionId]: false };
+      enqueueAnswer({
+        questionId,
+        selectedOption: null,
+        markedForReview: false,
+        timeSpent: 0,
+      });
+      return updated;
+    });
+    
     toast.success('Response cleared');
   };
 
   // Mark for Review & Advance
   const handleMarkForReviewAndNext = () => {
     if (currentQuestion) {
-      setMarkedForReview((prev) => ({
-        ...prev,
-        [currentQuestion.id]: true,
-      }));
-      // Save current state
-      saveAllAnswers();
+      setMarkedForReview((prev) => {
+        const updated = { ...prev, [currentQuestion.id]: true };
+        enqueueAnswer({
+          questionId: currentQuestion.id,
+          selectedOption: userAnswers[currentQuestion.id] || null,
+          markedForReview: true,
+          timeSpent: 0,
+        });
+        return updated;
+      });
+      syncNow();
     }
     goToQuestion(currentQuestionIndex + 1);
   };
   
   const toggleMarkForReview = (questionId: string) => {
-    setMarkedForReview((prev) => ({
-      ...prev,
-      [questionId]: !prev[questionId],
-    }));
+    setMarkedForReview((prev) => {
+      const updated = { ...prev, [questionId]: !prev[questionId] };
+      enqueueAnswer({
+        questionId,
+        selectedOption: userAnswers[questionId] || null,
+        markedForReview: updated[questionId],
+        timeSpent: 0,
+      });
+      return updated;
+    });
   };
   
   const goToQuestion = (index: number) => {
@@ -582,9 +616,7 @@ export function ExamInterfaceUI({
   };
   
   const handleSaveAndNext = () => {
-    if (currentQuestion) {
-      saveAllAnswers();
-    }
+    syncNow();
     goToQuestion(currentQuestionIndex + 1);
   };
 
@@ -638,8 +670,12 @@ export function ExamInterfaceUI({
       <div className="mt-4">
         <div className="flex flex-col space-y-3">
           {Object.entries(options).map(([key, value]) => (
-            <label key={key} className="flex items-start gap-3 cursor-pointer group">
-              <div className="flex-shrink-0 mt-0.5">
+            <div 
+              key={key} 
+              className="flex items-start gap-3 cursor-pointer group p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all duration-200"
+              onClick={() => handleOptionSelect(key)}
+            >
+              <div className="flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="radio"
                   name={`question-${currentQuestion.id}`}
@@ -649,14 +685,14 @@ export function ExamInterfaceUI({
                   className="w-4 h-4 text-blue-600 cursor-pointer"
                 />
               </div>
-              <div className="flex gap-2 text-[15px]">
+              <div className="flex gap-2 text-[15px] select-none">
                 <span className="font-bold">{key}.</span>
                 <div 
-                  className="text-black font-medium leading-relaxed"
+                  className="text-black dark:text-white font-medium leading-relaxed"
                   dangerouslySetInnerHTML={renderRichText(value as string)}
                 />
               </div>
-            </label>
+            </div>
           ))}
         </div>
       </div>
@@ -685,8 +721,12 @@ export function ExamInterfaceUI({
       <div className="mt-4">
         <div className="flex flex-col space-y-3">
           {Object.entries(options).map(([key, value]) => (
-            <label key={key} className="flex items-start gap-3 cursor-pointer group">
-              <div className="flex-shrink-0 mt-0.5">
+            <div 
+              key={key} 
+              className="flex items-start gap-3 cursor-pointer group p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all duration-200"
+              onClick={() => handleOptionToggle(key)}
+            >
+              <div className="flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
                   name={`question-${currentQuestion.id}`}
@@ -696,14 +736,14 @@ export function ExamInterfaceUI({
                   className="w-4 h-4 text-blue-600 cursor-pointer"
                 />
               </div>
-              <div className="flex gap-2 text-[15px]">
+              <div className="flex gap-2 text-[15px] select-none">
                 <span className="font-bold">{key}.</span>
                 <div 
-                  className="text-black font-medium leading-relaxed"
+                  className="text-black dark:text-white font-medium leading-relaxed"
                   dangerouslySetInnerHTML={renderRichText(value as string)}
                 />
               </div>
-            </label>
+            </div>
           ))}
         </div>
       </div>
@@ -923,13 +963,25 @@ export function ExamInterfaceUI({
               Instructions
             </div>
             <div className="flex items-center gap-4">
-              {lastSaved && (
+              {isSaving && (
+                <span className="text-[10px] text-sky-300 font-normal mr-2 animate-pulse">
+                  Syncing answers ({queueSize})...
+                </span>
+              )}
+              {hasPendingChanges && !isSaving && (
+                <span className="text-[10px] text-amber-300 font-normal mr-2">
+                  Unsaved changes ({queueSize})
+                </span>
+              )}
+              {!hasPendingChanges && !isSaving && lastSaved && (
                 <span className="text-[10px] text-[#86efac] font-normal mr-2">
-                  Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
               )}
               <span>Time Left : {formatTime(timeLeft)}</span>
-              <span className={isOnline ? 'text-emerald-600' : 'text-amber-600'}>{isOnline ? (lastSaved ? 'Saved' : 'Saving…') : 'Offline - responses queued'}</span>
+              <span className={isOnline ? 'text-emerald-600' : 'text-amber-600'}>
+                {isOnline ? 'Online' : 'Offline - responses queued'}
+              </span>
               {showCalculator && (
                 <button onClick={() => setShowCalculatorModal(!showCalculatorModal)} className="bg-[#f39c12] hover:bg-[#e67e22] p-1 rounded text-white shadow-sm">
                   <Calculator className="w-3.5 h-3.5" />
@@ -937,6 +989,14 @@ export function ExamInterfaceUI({
               )}
             </div>
           </div>
+          
+          {/* Offline Conspicuous Alert Banner */}
+          {!isOnline && (
+            <div className="bg-amber-500 text-white font-bold text-xs px-4 py-2 flex items-center gap-2 shrink-0 animate-pulse">
+              <ShieldAlert className="w-4 h-4" />
+              <span>Connection lost. Your answers are saved locally and will sync when the connection returns.</span>
+            </div>
+          )}
           
           {/* Section Tabs */}
           <div className="bg-[#e4e4e4] flex px-4 pt-1.5 shrink-0 border-b border-gray-300 h-[34px]">

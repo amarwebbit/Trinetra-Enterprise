@@ -1,9 +1,10 @@
 import dynamic from 'next/dynamic';
-import { Loader2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const Loading = () => (
-  <div className="flex items-center justify-center p-8">
-    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+  <div className="space-y-4 p-8 w-full max-w-4xl mx-auto">
+    <Skeleton variant="card" height={120} className="w-full" />
+    <Skeleton variant="text" height={18} count={3} className="w-full" />
   </div>
 );
 

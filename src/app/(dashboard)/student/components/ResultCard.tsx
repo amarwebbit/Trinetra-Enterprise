@@ -9,7 +9,7 @@ export function ResultCard({ result }: { result: any }) {
   const passed = percentage >= passingPercentage;
   const isPublished = result.exams?.show_results_immediately !== false;
   const hasScore = result.score !== null && result.score !== undefined;
-  const isScored = ['submitted', 'evaluated', 'graded'].includes(result.status) && hasScore;
+  const isScored = ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded'].includes(result.status) && hasScore;
 
   // Show PENDING only if results are explicitly hidden or not yet scored
   if (!isPublished || !isScored) {

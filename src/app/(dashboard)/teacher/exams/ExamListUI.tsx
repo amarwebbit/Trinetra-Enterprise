@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 import { deleteExam, duplicateExam } from '@/app/actions/exam-actions';
 import { 
   FileText, Play, CheckCircle, CalendarDays, Clock, 
@@ -57,8 +58,12 @@ export default function ExamListUI({
       const resData = await response.json();
       const inviteUrl = resData.inviteUrl || resData.data?.inviteUrl;
       if (resData.success && inviteUrl) {
-        await navigator.clipboard.writeText(inviteUrl);
-        toast.success('Live Exam invite link copied to clipboard!');
+        const success = await copyToClipboard(inviteUrl);
+        if (success) {
+          toast.success('Live Exam invite link copied to clipboard!');
+        } else {
+          toast.error('Failed to copy invite link to clipboard');
+        }
       } else {
         toast.error(resData.error || 'Failed to generate invite link');
       }

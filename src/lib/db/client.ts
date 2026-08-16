@@ -1,3 +1,4 @@
+import '@/lib/env-validator';
 import { PrismaClient } from '@prisma/client';
 
 const prismaClientSingleton = () => {

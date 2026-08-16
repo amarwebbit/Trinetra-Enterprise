@@ -112,7 +112,7 @@ export default async function ExamTakePage(
     }),
   ]);
 
-  const showCalculator = true;
+  const showCalculator = !!(exam?.metadata as any)?.allow_calculator;
 
   return (
     <ExamInterfaceUI

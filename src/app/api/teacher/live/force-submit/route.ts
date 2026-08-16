@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/db/client';
 import { authOptions } from '@/lib/auth/options';
+import { evaluateAttempt } from '@/lib/evaluation';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,15 +27,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
     }
 
-    // Force submit attempt
-    await prisma.exam_attempts.update({
-      where: { id: attemptId },
-      data: {
-        status: 'force_submitted',
-        end_time: new Date(),
-        updated_at: new Date(),
-      }
-    });
+    // Force submit and grade attempt
+    await evaluateAttempt(attemptId, 'force_submitted');
 
     try {
       await prisma.proctoring_logs.create({

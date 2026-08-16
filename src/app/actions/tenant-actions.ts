@@ -253,8 +253,8 @@ export async function updateTenantColor(tenantId: string, field: string, value: 
     throw new Error('Unauthorized');
   }
 
-  if (field !== 'primary_color' && field !== 'secondary_color') {
-    throw new Error('Invalid color field');
+  if (field !== 'primary_color' && field !== 'secondary_color' && field !== 'font_family') {
+    throw new Error('Invalid branding field');
   }
 
   await prisma.tenants.update({
@@ -266,7 +266,7 @@ export async function updateTenantColor(tenantId: string, field: string, value: 
     data: {
       tenant_id: tenantId,
       user_id: session.user.id,
-      action: `TENANT_COLOR_UPDATED`,
+      action: field === 'font_family' ? 'TENANT_FONT_UPDATED' : 'TENANT_COLOR_UPDATED',
       resource_type: 'tenant',
       resource_id: tenantId,
       new_values: { [field]: value },

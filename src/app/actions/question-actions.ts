@@ -462,3 +462,32 @@ export async function importQuestionsFromJSON(formData: FormData) {
   revalidatePath('/teacher/questions');
   return { success: true, count: result.count };
 }
+
+export async function toggleShareQuestionBank(bankId: string, isShared: boolean) {
+  const session = await getServerSession(authOptions);
+  if (!session || !['teacher', 'admin', 'super_admin'].includes(session.user.role)) {
+    throw new Error('Unauthorized');
+  }
+
+  const tenantId = session.user.tenantId || (session.user as any).tenant_id;
+
+  const bank = await prisma.question_banks.findFirst({
+    where: { id: bankId, tenant_id: tenantId }
+  });
+
+  if (!bank) {
+    throw new Error('Question bank not found');
+  }
+
+  if (bank.teacher_id !== session.user.id && session.user.role === 'teacher') {
+    throw new Error('Unauthorized to share this question bank');
+  }
+
+  await prisma.question_banks.update({
+    where: { id: bankId },
+    data: { is_shared: isShared }
+  });
+
+  revalidatePath('/teacher/questions');
+  return { success: true };
+}

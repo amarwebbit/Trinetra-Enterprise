@@ -9,9 +9,9 @@ services:
     ports:
       - "5435:5432"
     environment:
-      POSTGRES_USER: ${DB_USER}
+      POSTGRES_USER: ${DB_USER:-examin_admin}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_DB: ${DB_DATABASE:-exam_engine}
     volumes:
       - postgres_primary_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
@@ -24,6 +24,12 @@ services:
       -c max_connections=200
       -c shared_buffers=256MB
       -c effective_cache_size=1GB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-examin_admin} -d ${DB_DATABASE:-exam_engine}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - exam_network
 
@@ -37,25 +43,26 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: ${DB_USER}
+      POSTGRES_USER: ${DB_USER:-examin_admin}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_DB: ${DB_DATABASE:-exam_engine}
       PG_REPLICATE_FROM: postgres-primary
     volumes:
       - postgres_replica_data:/var/lib/postgresql/data
     depends_on:
       postgres-primary:
-        condition: service_started
+        condition: service_healthy
     command: |
       postgres 
       -c wal_level=replica
       -c hot_standby=on
       -c max_connections=200
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE} -h localhost -p 5432" ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-examin_admin} -d ${DB_DATABASE:-exam_engine} -h localhost -p 5432"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - exam_network
 
@@ -74,13 +81,14 @@ services:
       DB_HOST: postgres-primary
       DB_PORT: 5432
       DB_NAME: ${DB_DATABASE}
+      AUTH_TYPE: scram-sha-256
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 1000
       DEFAULT_POOL_SIZE: 200
       LISTEN_PORT: 6432
     depends_on:
       postgres-primary:
-        condition: service_started
+        condition: service_healthy
     networks:
       - exam_network
 
@@ -156,7 +164,7 @@ services:
       GOTRUE_MAILER_AUTOCONFIRM: true
     depends_on:
       postgres-primary:
-        condition: service_started
+        condition: service_healthy
       pgbouncer:
         condition: service_started
     networks:
@@ -181,8 +189,10 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       postgres-primary:
-        condition: service_started
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      pgbouncer:
         condition: service_started
     networks:
       - exam_network
@@ -200,9 +210,11 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./ssl:/etc/nginx/ssl
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./uploads:/var/www/uploads:ro
     depends_on:
-      - app
+      app:
+        condition: service_started
     networks:
       - exam_network
 

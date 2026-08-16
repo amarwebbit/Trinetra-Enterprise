@@ -9,11 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { 
   AlertTriangle, CheckCircle2, AlertCircle, XCircle, 
-  MessageSquare, MonitorOff, StopCircle, BellRing
+  MessageSquare, MonitorOff, StopCircle, BellRing, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { forceSubmit, endExam, sendMessage } from '@/app/actions/live-actions';
+import { forceSubmit, endExam, sendMessage, adjustAttemptTime } from '@/app/actions/live-actions';
 
 type ExamOpt = {
   id: string;
@@ -98,6 +98,29 @@ export default function LiveMonitoringUI({
       toast.success(`Exam submitted for ${studentName}`);
     } catch (e: any) {
       toast.error(e.message || "Failed to force submit");
+    }
+  };
+
+  const handleAdjustTime = async (studentId: string, studentName: string) => {
+    const amountStr = prompt(`Enter number of minutes to add or subtract for ${studentName} (e.g., 10 to add, -5 to subtract):`);
+    if (amountStr === null) return;
+    
+    const minutes = parseInt(amountStr);
+    if (isNaN(minutes) || minutes === 0) {
+      toast.error('Please enter a valid non-zero number of minutes');
+      return;
+    }
+
+    try {
+      const result = await adjustAttemptTime(studentId, minutes);
+      if (result?.success) {
+        toast.success(`Adjusted ${studentName}'s exam time by ${minutes} minutes successfully.`);
+      } else {
+        toast.error('Failed to adjust exam time');
+      }
+    } catch (error: any) {
+      console.error('Adjust time error:', error);
+      toast.error(error.message || 'Failed to adjust exam time');
     }
   };
 
@@ -218,14 +241,24 @@ export default function LiveMonitoringUI({
                           <h4 className="font-bold text-foreground">{student.student.name}</h4>
                           <span className="text-xs text-muted-foreground">{student.student.email}</span>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 px-2 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-none"
-                          onClick={() => handleForceSubmit(student.id, student.student.name)}
-                        >
-                          Force Submit
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 px-2 text-xs text-orange-500 hover:text-orange-600 hover:bg-orange-500/10 rounded-none"
+                            onClick={() => handleAdjustTime(student.id, student.student.name)}
+                          >
+                            <Clock className="w-3 h-3 mr-1" /> Adjust Time
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 px-2 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-none"
+                            onClick={() => handleForceSubmit(student.id, student.student.name)}
+                          >
+                            Force Submit
+                          </Button>
+                        </div>
                       </div>
                       
                       <div className="space-y-1.5 mb-4">

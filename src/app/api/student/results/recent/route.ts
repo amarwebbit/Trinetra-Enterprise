@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
       where: {
         student_id: session.user.id,
         status: {
-          in: ['submitted', 'evaluated', 'graded']
+          in: ['submitted', 'auto_submitted', 'force_submitted', 'evaluated', 'graded']
         },
       },
       include: {

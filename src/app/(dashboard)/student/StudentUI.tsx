@@ -128,12 +128,7 @@ export default function StudentUI({
         name: r.exams?.title?.substring(0, 12) || 'Test',
         Score: Math.round(r.percentage || 0),
       }))
-    : [
-        { name: 'Practice 1', Score: 60 },
-        { name: 'Practice 2', Score: 72 },
-        { name: 'Mock Exam', Score: 68 },
-        { name: 'Final Quiz', Score: 85 },
-      ];
+    : [];
 
   const initials = studentName?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'ST';
   
@@ -295,24 +290,34 @@ export default function StudentUI({
               Preparation & Performance Trends
             </h3>
             <div className="h-48 w-full">
-              {mountedChart ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={chartStroke} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={chartStroke} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={9} tickLine={false} />
-                    <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={9} tickLine={false} axisLine={false} domain={[0, 100]} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="Score" stroke={chartStroke} strokeWidth={2} fillOpacity={1} fill="url(#scoreColor)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+              {displayResults.length > 0 ? (
+                mountedChart ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={chartStroke} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={chartStroke} stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={9} tickLine={false} />
+                      <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={9} tickLine={false} axisLine={false} domain={[0, 100]} />
+                      <RechartsTooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="Score" stroke={chartStroke} strokeWidth={2} fillOpacity={1} fill="url(#scoreColor)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full bg-slate-100 dark:bg-slate-800/40 animate-pulse rounded" />
+                )
               ) : (
-                <div className="h-full w-full bg-slate-100 dark:bg-slate-800/40 animate-pulse rounded" />
+                <div className="h-full w-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50/50 dark:bg-slate-900/30">
+                  <Trophy className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">No test history yet</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 max-w-[220px]">
+                    Complete your first exam to unlock performance trends and analytics.
+                  </p>
+                </div>
               )}
             </div>
           </div>

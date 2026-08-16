@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils/helpers';
 import { useWhiteLabel } from '@/components/providers/WhiteLabelProvider';
+import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, 
   Users, 
@@ -43,19 +44,22 @@ function SidebarItem({ href, icon: Icon, label, primaryColor }: SidebarItemProps
     <Link
       href={href}
       className={cn(
-        'flex items-center space-x-3 px-4 py-3 text-sm font-semibold transition-all border-l-4 rounded-none',
+        'relative flex items-center space-x-3 px-4 py-3 text-sm font-semibold transition-colors duration-200 border-l-4 rounded-none group',
         isActive
-          ? 'text-white font-bold shadow-sm'
+          ? 'text-white font-bold shadow-sm border-l-primary'
           : 'border-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
       )}
-      style={
-        isActive && mounted && primaryColor
-          ? { backgroundColor: activeBg, borderColor: activeBg }
-          : undefined
-      }
       suppressHydrationWarning
     >
-      <Icon className="h-5 w-5 shrink-0" />
+      {isActive && mounted && (
+        <motion.div
+          layoutId="active-sidebar-pill"
+          className="absolute inset-0 -z-10"
+          style={{ backgroundColor: activeBg, borderLeft: `4px solid ${activeBg}` }}
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        />
+      )}
+      <Icon className={cn("h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-105", isActive ? "text-white" : "text-slate-500 dark:text-slate-400")} />
       <span suppressHydrationWarning>{label}</span>
     </Link>
   );

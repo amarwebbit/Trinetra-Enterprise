@@ -56,11 +56,17 @@ async function parseCSV(text: string) {
 function validateStudentRows(rows: any[]) {
   const valid: any[] = [];
   const errors: any[] = [];
+  const timestamp = Date.now();
   
   rows.forEach((row, index) => {
     const email = row.email || row.Email;
     const fullName = row.fullName || row.full_name || row.Name || row['Full Name'] || (email ? email.split('@')[0] : '');
-    const rollNumber = row.rollNumber || row.roll_number || row['Roll Number'] || row['Roll No'] || row.RollNumber || `STUDENT_${index + 1}`;
+    const role = row.role?.toLowerCase() || 'student';
+    const isTeacher = role === 'teacher' || role === 'admin';
+    
+    const rollNumber = isTeacher 
+      ? null 
+      : (row.rollNumber || row.roll_number || row['Roll Number'] || row['Roll No'] || row.RollNumber || `STUDENT_${timestamp}_${index + 1}`);
 
     if (!email) {
       errors.push({ row: index + 1, field: 'email', message: 'Email is required', value: '' });
@@ -70,8 +76,8 @@ function validateStudentRows(rows: any[]) {
     valid.push({
       email: email.trim().toLowerCase(),
       fullName: fullName.trim(),
-      rollNumber: rollNumber.trim(),
-      role: row.role?.toLowerCase() || 'student',
+      rollNumber: rollNumber ? rollNumber.trim() : null,
+      role: role,
       branch: row.branch || row.Branch || row.department || 'CSE',
       passingYear: row.passingYear || row['Passing Year'] || '2026',
     });

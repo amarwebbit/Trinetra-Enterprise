@@ -33,16 +33,21 @@ export default async function AdminNotificationsPage() {
     prisma.notifications.count({ where: { tenant_id: tenantId, is_read: true } }),
   ]);
   
-  // 3. Fetch Tenant Settings (Templates)
+const DEFAULT_SYSTEM_TEMPLATES = [
+  { id: 'exam-schedule', name: 'Exam Schedule Alert', channel: 'app', title: 'Upcoming Exam Scheduled', content: 'Dear student, your exam has been scheduled. Please check your dashboard for details.' },
+  { id: 'result-published', name: 'Results Published', channel: 'app', title: 'Exam Results Available', content: 'Your recent exam result is now available to view under your dashboard results tab.' },
+  { id: 'system-maintenance', name: 'System Maintenance', channel: 'app', title: 'Scheduled System Maintenance', content: 'The platform will undergo scheduled maintenance. Please save your work.' },
+];
+
+  // Fetch Tenant Settings (Templates)
   const tenant = await prisma.tenants.findUnique({
     where: { id: tenantId },
     select: { 
-      module_settings: true, // Assuming templates are stored in JSON settings if not specific columns
+      module_settings: true,
     },
   });
 
-  // Mock template count if not explicitly found in schema
-  const templates = (tenant?.module_settings as any)?.templates || [];
+  const templates = (tenant?.module_settings as any)?.templates || DEFAULT_SYSTEM_TEMPLATES;
   
   // 4. Fetch available courses and departments for targeted sending
   const [courses, departments] = await Promise.all([

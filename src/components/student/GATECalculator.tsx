@@ -16,6 +16,7 @@ export function GATECalculator({ value = '', onChange, className = '', onClose }
   const [memory, setMemory] = useState<number | null>(null);
   const [isRadian, setIsRadian] = useState(false);
   const [isNewEntry, setIsNewEntry] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -349,7 +350,9 @@ export function GATECalculator({ value = '', onChange, className = '', onClose }
         <div className="gate-title-bar" onMouseDown={handleMouseDown}>
           <div className="font-semibold text-xs">Scientific Calculator</div>
           <div className="flex items-center gap-2">
-            <button className="text-xs text-blue-600 hover:underline px-1" onClick={() => window.alert('Help modal would open here.')}>Help</button>
+            <button className="text-xs text-blue-600 hover:underline px-1" onClick={() => setShowHelp(!showHelp)}>
+              {showHelp ? 'Calc' : 'Help'}
+            </button>
             {onClose && (
               <button onClick={onClose} className="hover:bg-red-500 hover:text-white p-0.5 rounded transition-colors text-slate-500">
                 <X className="w-4 h-4" />
@@ -359,93 +362,123 @@ export function GATECalculator({ value = '', onChange, className = '', onClose }
         </div>
         
         <div className="gate-calc-container rounded-t-none">
-          <div className="gate-display-area">
-            <div className="gate-expression">{expression}</div>
-            <div className="gate-main-display">{display}</div>
-            <div className="flex justify-between text-[10px] text-slate-500 h-[15px] font-bold">
-              <span>{memory !== null ? 'M' : ''}</span>
+          {showHelp ? (
+            <div className="p-4 text-[11px] overflow-y-auto h-[320px] bg-slate-50 text-slate-800 space-y-3 font-sans" style={{ width: '532px' }}>
+              <h3 className="font-bold text-xs text-blue-800 border-b pb-1 mb-2">GATE Scientific Calculator Guide</h3>
+              <div>
+                <h4 className="font-bold text-blue-700">Trigonometry & Hyperbolic</h4>
+                <p>Use <strong>sin, cos, tan</strong> for standard trig, and <strong>sinh, cosh, tanh</strong> for hyperbolic functions. Toggle between degrees (Deg) and radians (Rad) at the top of the calculator.</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-blue-700">Memory Functions (MC, MR, MS, M+, M-)</h4>
+                <p><strong>MC:</strong> Clear memory. <strong>MR:</strong> Recall stored memory value. <strong>MS:</strong> Store current value in memory. <strong>M+:</strong> Add current display value to memory. <strong>M-:</strong> Subtract current display value from memory.</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-blue-700">Exponentiation & Remainder</h4>
+                <p>Use <strong>xⁿ</strong> for power functions (e.g. 2 xⁿ 3 = 8). Use <strong>mod</strong> to calculate remainder/modulo.</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-blue-700">Logarithms & Roots</h4>
+                <p>Use <strong>ln</strong> for natural log, <strong>log</strong> for base 10, and <strong>sqrt</strong> for square root.</p>
+              </div>
+              <button 
+                onClick={() => setShowHelp(false)}
+                className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 rounded transition-colors text-xs"
+              >
+                Return to Calculator
+              </button>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="gate-display-area">
+                <div className="gate-expression">{expression}</div>
+                <div className="gate-main-display">{display}</div>
+                <div className="flex justify-between text-[10px] text-slate-500 h-[15px] font-bold">
+                  <span>{memory !== null ? 'M' : ''}</span>
+                </div>
+              </div>
 
-          <div className="flex items-center mb-2 gap-4">
-            <button className="gate-btn scientific px-3" onClick={() => handleOperator('mod')}>mod</button>
-            <div className="gate-radio-group ml-4">
-              <label className="gate-radio-label">
-                <input type="radio" checked={!isRadian} onChange={() => setIsRadian(false)} className="w-3 h-3" />
-                Deg
-              </label>
-              <label className="gate-radio-label">
-                <input type="radio" checked={isRadian} onChange={() => setIsRadian(true)} className="w-3 h-3" />
-                Rad
-              </label>
-            </div>
-          </div>
+              <div className="flex items-center mb-2 gap-4">
+                <button className="gate-btn scientific px-3" onClick={() => handleOperator('mod')}>mod</button>
+                <div className="gate-radio-group ml-4">
+                  <label className="gate-radio-label">
+                    <input type="radio" checked={!isRadian} onChange={() => setIsRadian(false)} className="w-3 h-3" />
+                    Deg
+                  </label>
+                  <label className="gate-radio-label">
+                    <input type="radio" checked={isRadian} onChange={() => setIsRadian(true)} className="w-3 h-3" />
+                    Rad
+                  </label>
+                </div>
+              </div>
 
-          <div className="gate-grid">
-            {/* Row 3 (Memory) */}
-            <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('MC')}>MC</button>
-            <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('MR')}>MR</button>
-            <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('MS')}>MS</button>
-            <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('M+')}>M+</button>
-            <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('M-')}>M-</button>
+              <div className="gate-grid">
+                {/* Row 3 (Memory) */}
+                <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('MC')}>MC</button>
+                <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('MR')}>MR</button>
+                <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('MS')}>MS</button>
+                <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('M+')}>M+</button>
+                <button className="gate-btn memory" style={{ gridColumn: 'span 2' }} onClick={() => handleMemory('M-')}>M-</button>
 
-            {/* Row 4 */}
-            <button className="gate-btn scientific" onClick={() => handleFunction('sinh')}>sinh</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('cosh')}>cosh</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('tanh')}>tanh</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('Exp')}>Exp</button>
-            <button className="gate-btn scientific" onClick={() => handleParenthesis('(')}>(</button>
-            <button className="gate-btn clear" style={{ gridColumn: 'span 2' }} onClick={handleBackspace}>←</button>
-            <button className="gate-btn clear" onClick={handleClear}>C</button>
-            <button className="gate-btn operator" onClick={() => handleFunction('+/-')}>+/-</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('sqrt')}>sqrt</button>
+                {/* Row 4 */}
+                <button className="gate-btn scientific" onClick={() => handleFunction('sinh')}>sinh</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('cosh')}>cosh</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('tanh')}>tanh</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('Exp')}>Exp</button>
+                <button className="gate-btn scientific" onClick={() => handleParenthesis('(')}>(</button>
+                <button className="gate-btn clear" style={{ gridColumn: 'span 2' }} onClick={handleBackspace}>←</button>
+                <button className="gate-btn clear" onClick={handleClear}>C</button>
+                <button className="gate-btn operator" onClick={() => handleFunction('+/-')}>+/-</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('sqrt')}>sqrt</button>
 
-            {/* Row 5 */}
-            <button className="gate-btn scientific" onClick={() => handleFunction('sinh⁻¹')}>sinh⁻¹</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('cosh⁻¹')}>cosh⁻¹</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('tanh⁻¹')}>tanh⁻¹</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('log₂x')}>log₂x</button>
-            <button className="gate-btn scientific" onClick={() => handleParenthesis(')')}>)</button>
-            <button className="gate-btn number" onClick={() => handleNumber('7')}>7</button>
-            <button className="gate-btn number" onClick={() => handleNumber('8')}>8</button>
-            <button className="gate-btn number" onClick={() => handleNumber('9')}>9</button>
-            <button className="gate-btn operator" onClick={() => handleOperator('/')}>/</button>
-            <button className="gate-btn operator" onClick={() => handleOperator('%')}>%</button>
+                {/* Row 5 */}
+                <button className="gate-btn scientific" onClick={() => handleFunction('sinh⁻¹')}>sinh⁻¹</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('cosh⁻¹')}>cosh⁻¹</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('tanh⁻¹')}>tanh⁻¹</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('log₂x')}>log₂x</button>
+                <button className="gate-btn scientific" onClick={() => handleParenthesis(')')}>)</button>
+                <button className="gate-btn number" onClick={() => handleNumber('7')}>7</button>
+                <button className="gate-btn number" onClick={() => handleNumber('8')}>8</button>
+                <button className="gate-btn number" onClick={() => handleNumber('9')}>9</button>
+                <button className="gate-btn operator" onClick={() => handleOperator('/')}>/</button>
+                <button className="gate-btn operator" onClick={() => handleOperator('%')}>%</button>
 
-            {/* Row 6 */}
-            <button className="gate-btn scientific" onClick={() => handleFunction('π')}>π</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('e')}>e</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('n!')}>n!</button>
-            <button className="gate-btn scientific" onClick={() => handleOperator('xⁿ')}>xⁿ</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('10ˣ')}>10ˣ</button>
-            <button className="gate-btn number" onClick={() => handleNumber('4')}>4</button>
-            <button className="gate-btn number" onClick={() => handleNumber('5')}>5</button>
-            <button className="gate-btn number" onClick={() => handleNumber('6')}>6</button>
-            <button className="gate-btn operator" onClick={() => handleOperator('*')}>*</button>
-            <button className="gate-btn operator" onClick={() => handleFunction('1/x')}>1/x</button>
+                {/* Row 6 */}
+                <button className="gate-btn scientific" onClick={() => handleFunction('π')}>π</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('e')}>e</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('n!')}>n!</button>
+                <button className="gate-btn scientific" onClick={() => handleOperator('xⁿ')}>xⁿ</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('10ˣ')}>10ˣ</button>
+                <button className="gate-btn number" onClick={() => handleNumber('4')}>4</button>
+                <button className="gate-btn number" onClick={() => handleNumber('5')}>5</button>
+                <button className="gate-btn number" onClick={() => handleNumber('6')}>6</button>
+                <button className="gate-btn operator" onClick={() => handleOperator('*')}>*</button>
+                <button className="gate-btn operator" onClick={() => handleFunction('1/x')}>1/x</button>
 
-            {/* Row 7 */}
-            <button className="gate-btn scientific" onClick={() => handleFunction('sin')}>sin</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('cos')}>cos</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('tan')}>tan</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('x³')}>x³</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('x²')}>x²</button>
-            <button className="gate-btn number" onClick={() => handleNumber('1')}>1</button>
-            <button className="gate-btn number" onClick={() => handleNumber('2')}>2</button>
-            <button className="gate-btn number" onClick={() => handleNumber('3')}>3</button>
-            <button className="gate-btn operator" onClick={() => handleOperator('-')}>-</button>
-            <button className="gate-btn equals" style={{ gridRow: 'span 2' }} onClick={handleCalculate}>=</button>
+                {/* Row 7 */}
+                <button className="gate-btn scientific" onClick={() => handleFunction('sin')}>sin</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('cos')}>cos</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('tan')}>tan</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('x³')}>x³</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('x²')}>x²</button>
+                <button className="gate-btn number" onClick={() => handleNumber('1')}>1</button>
+                <button className="gate-btn number" onClick={() => handleNumber('2')}>2</button>
+                <button className="gate-btn number" onClick={() => handleNumber('3')}>3</button>
+                <button className="gate-btn operator" onClick={() => handleOperator('-')}>-</button>
+                <button className="gate-btn equals" style={{ gridRow: 'span 2' }} onClick={handleCalculate}>=</button>
 
-            {/* Row 8 */}
-            <button className="gate-btn scientific" onClick={() => handleFunction('sin⁻¹')}>sin⁻¹</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('cos⁻¹')}>cos⁻¹</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('tan⁻¹')}>tan⁻¹</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('³√x')}>³√x</button>
-            <button className="gate-btn scientific" onClick={() => handleFunction('|x|')}>|x|</button>
-            <button className="gate-btn number" style={{ gridColumn: 'span 2' }} onClick={() => handleNumber('0')}>0</button>
-            <button className="gate-btn number" onClick={() => handleNumber('.')}>.</button>
-            <button className="gate-btn operator" onClick={() => handleOperator('+')}>+</button>
-          </div>
+                {/* Row 8 */}
+                <button className="gate-btn scientific" onClick={() => handleFunction('sin⁻¹')}>sin⁻¹</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('cos⁻¹')}>cos⁻¹</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('tan⁻¹')}>tan⁻¹</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('³√x')}>³√x</button>
+                <button className="gate-btn scientific" onClick={() => handleFunction('|x|')}>|x|</button>
+                <button className="gate-btn number" style={{ gridColumn: 'span 2' }} onClick={() => handleNumber('0')}>0</button>
+                <button className="gate-btn number" onClick={() => handleNumber('.')}>.</button>
+                <button className="gate-btn operator" onClick={() => handleOperator('+')}>+</button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </>

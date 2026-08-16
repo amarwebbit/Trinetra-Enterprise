@@ -10,6 +10,9 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE EXTENSION IF NOT EXISTS "pg_cron";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
+-- Create auth schema for GoTrue / Supabase Auth
+CREATE SCHEMA IF NOT EXISTS auth;
+
 -- ============================================
 -- 1. TENANTS TABLE
 -- ============================================

@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { notFound, redirect } from 'next/navigation';
 import { ResultDetailUI } from './ResultDetailUI';
 import { serializeData } from '@/lib/utils/serialize';
@@ -11,15 +10,15 @@ export default async function StudentResultDetailPage(
   }
 ) {
   const params = await props.params;
-  const session = await getServerSession(authOptions);
+  const actor = await getExamActor();
 
-  if (!session || !['student', 'admin', 'super_admin'].includes(session.user.role)) {
+  if (!actor) {
     redirect('/login');
   }
 
   const { examId } = params;
-  const studentId = session.user.id;
-  const tenantId = session.user.tenantId || (session.user as any).tenant_id;
+  const studentId = actor.studentId;
+  const tenantId = actor.tenantId;
 
   // Fetch attempt with ALL data
   const attempt = await prisma.exam_attempts.findFirst({
@@ -52,6 +51,13 @@ export default async function StudentResultDetailPage(
 
   if (!attempt) {
     notFound();
+  }
+
+  // Self-heal: If the attempt was submitted but not evaluated, evaluate it now!
+  if (attempt.score === null || attempt.percentage === null || attempt.answers.some(a => a.is_correct === null)) {
+    const { evaluateAttempt } = await import('@/lib/evaluation');
+    await evaluateAttempt(attempt.id);
+    redirect(`/student/results/${examId}`);
   }
 
   if (attempt.exams) {
@@ -88,6 +94,15 @@ export default async function StudentResultDetailPage(
     );
   }
 
+  // Fetch student details from DB
+  const student = await prisma.users.findUnique({
+    where: { id: studentId },
+    select: {
+      full_name: true,
+      roll_number: true,
+    },
+  });
+
   // FETCH REAL DATA - Tenant branding for white-label
   const tenant = await prisma.tenants.findUnique({
     where: { id: tenantId },
@@ -106,7 +121,12 @@ export default async function StudentResultDetailPage(
     );
     
     const scored = sectionAnswers.reduce((sum: number, a: any) => sum + (Number(a.marks_awarded) || 0), 0);
-    const total = sectionQuestions.reduce((sum: number, eq: any) => sum + (Number(eq.marks) || 0), 0);
+    const total = sectionQuestions.reduce((sum: number, eq: any) => {
+      const q = eq.questions || eq.question;
+      const rawMarks = eq.marks !== null && eq.marks !== undefined ? eq.marks : q?.marks;
+      const marks = Number(rawMarks) || 1.0;
+      return sum + marks;
+    }, 0);
     
     return {
       name: section.name,
@@ -122,9 +142,9 @@ export default async function StudentResultDetailPage(
     0
   );
 
-  const correct = attempt.answers.filter((a: any) => a.is_correct === true).length;
-  const wrong = attempt.answers.filter((a: any) => a.is_correct === false).length;
-  const unattempted = totalQuestions - attempt.answers.length;
+  const correct = attempt.answers.filter((a: any) => a.is_correct === true && a.answer_text && a.answer_text.trim() !== '').length;
+  const wrong = attempt.answers.filter((a: any) => a.is_correct === false && a.answer_text && a.answer_text.trim() !== '').length;
+  const unattempted = totalQuestions - (correct + wrong);
 
   // 7-DAY AUTO PURGE RULE FOR DETAILED QUESTION ANALYSIS
   const attemptEndTime = attempt.end_time ? new Date(attempt.end_time).getTime() : Date.now();
@@ -180,8 +200,8 @@ export default async function StudentResultDetailPage(
       stats={{ correct, wrong, unattempted, totalQuestions }}
       passed={passed}
       passingPercentage={rawPassingPercentage}
-      studentName={(session.user as any).fullName || session.user.name}
-      rollNumber={(session.user as any).roll_number || 'N/A'}
+      studentName={student?.full_name || 'Student'}
+      rollNumber={student?.roll_number || 'N/A'}
       isPurged={isPurged}
       detailedQuestions={serializedDetailedQuestions}
     />

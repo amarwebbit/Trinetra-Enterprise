@@ -187,6 +187,7 @@ export async function bulkImportUsers(users: z.infer<typeof userSchema>[]) {
       });
       if (!exists) {
         const hash = await bcrypt.hash(generatePassword(), 10);
+        const rollVal = validated.role === 'student' ? (validated.roll_number || `STUDENT_${Date.now()}_${successCount}`) : null;
         await prisma.users.create({
           data: {
             tenant_id: tenantId,
@@ -194,6 +195,7 @@ export async function bulkImportUsers(users: z.infer<typeof userSchema>[]) {
             email: validated.email,
             role: validated.role,
             department_id: validated.department_id || null,
+            roll_number: rollVal,
             password_hash: hash,
             is_active: true
           }
