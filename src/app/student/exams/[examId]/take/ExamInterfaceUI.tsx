@@ -118,18 +118,23 @@ export function ExamInterfaceUI({
     const attemptStart = attempt.start_time ? new Date(attempt.start_time).getTime() : now;
     const durationMs = (exam.duration_minutes || 60) * 60 * 1000;
     
-    // Read time adjustment from attempt metadata
-    const metadata = attempt.metadata as any || {};
-    const timeAdjustmentSeconds = Number(metadata.time_adjustment_seconds || 0);
-    const timeAdjustmentMs = timeAdjustmentSeconds * 1000;
+    // Read time adjustment from attempt metadata and exam metadata
+    const attemptMeta = attempt.metadata as any || {};
+    const studentAdjustment = Number(attemptMeta.time_adjustment_seconds || 0);
+
+    const examMeta = exam.metadata as any || {};
+    const examAdjustment = Number(examMeta.time_adjustment_seconds || 0);
+
+    const totalAdjustmentSeconds = studentAdjustment + examAdjustment;
+    const timeAdjustmentMs = totalAdjustmentSeconds * 1000;
     
     // Attempt duration ends at attemptStart + duration_minutes + adjustment
-    const examEndMs = exam.end_time ? new Date(exam.end_time).getTime() : attemptStart + durationMs + timeAdjustmentMs;
+    const examEndMs = exam.end_time ? new Date(exam.end_time).getTime() + (examAdjustment * 1000) : attemptStart + durationMs + timeAdjustmentMs;
     const attemptEndMs = Math.min(attemptStart + durationMs + timeAdjustmentMs, examEndMs);
     
     const diff = Math.floor((attemptEndMs - now) / 1000);
     return Math.max(0, diff);
-  }, [attempt.start_time, attempt.metadata, exam.duration_minutes, exam.end_time]);
+  }, [attempt.start_time, attempt.metadata, exam.duration_minutes, exam.end_time, exam.metadata]);
 
   const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
   const [isSubmitting, setIsSubmitting] = useState(false);

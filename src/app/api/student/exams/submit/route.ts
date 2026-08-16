@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { prisma } from '@/lib/db/client';
 import { revalidatePath } from 'next/cache';
 import { evaluateAttempt } from '@/lib/evaluation';
@@ -25,8 +24,8 @@ import { withExamRateLimit } from '@/lib/redis/with-rate-limit';
 
 async function submitHandler(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const actor = await getExamActor();
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -55,7 +54,7 @@ async function submitHandler(req: NextRequest) {
       })
     );
 
-    if (!attempt || attempt.student_id !== session.user.id) {
+    if (!attempt || attempt.student_id !== actor.studentId) {
       return NextResponse.json({ error: 'Attempt not found or unauthorized' }, { status: 404 });
     }
 
@@ -89,7 +88,7 @@ async function submitHandler(req: NextRequest) {
           saveOps.push(
             prisma.answers.create({
               data: {
-                tenant_id: session.user.tenantId,
+                tenant_id: actor.tenantId,
                 attempt_id: attemptId,
                 question_id: qId,
                 answer_text: ansText.trim(),
@@ -112,16 +111,20 @@ async function submitHandler(req: NextRequest) {
       return NextResponse.json({ error: 'Evaluation failed' }, { status: 500 });
     }
 
-    // Log audit
-    await prisma.audit_logs.create({
-      data: {
-        tenant_id: session.user.tenantId,
-        user_id: session.user.id,
-        action: auto ? 'EXAM_AUTO_SUBMITTED' : 'EXAM_SUBMITTED',
-        resource_type: 'exam_attempt',
-        resource_id: attempt.id,
-      },
-    });
+    // Log audit safely
+    try {
+      await prisma.audit_logs.create({
+        data: {
+          tenant_id: actor.tenantId,
+          user_id: actor.studentId,
+          action: auto ? 'EXAM_AUTO_SUBMITTED' : 'EXAM_SUBMITTED',
+          resource_type: 'exam_attempt',
+          resource_id: attempt.id,
+        },
+      });
+    } catch (e) {
+      console.warn('Audit log creation failed during submission:', e);
+    }
 
     // Revalidate paths
     try {

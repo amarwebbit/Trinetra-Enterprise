@@ -1,11 +1,10 @@
 import { prisma } from '@/lib/db/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || !['student', 'admin', 'super_admin'].includes(session.user.role)) {
+  const actor = await getExamActor();
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
@@ -13,7 +12,7 @@ export async function POST(req: Request) {
   const { examId } = body;
   
   const exam = await prisma.exams.findFirst({
-    where: { id: examId, tenant_id: session.user.tenantId || (session.user as any).tenant_id, is_active: true, is_published: true },
+    where: { id: examId, tenant_id: actor.tenantId, is_active: true, is_published: true },
     select: { id: true, exam_type: true, max_attempts: true, start_time: true, end_time: true, metadata: true },
   });
   if (!exam) return NextResponse.json({ error: 'Exam is unavailable' }, { status: 404 });
@@ -26,7 +25,7 @@ export async function POST(req: Request) {
   const existing = await prisma.exam_attempts.findFirst({
     where: {
       exam_id: examId,
-      student_id: session.user.id,
+      student_id: actor.studentId,
       status: 'in_progress',
     },
   });
@@ -39,7 +38,7 @@ export async function POST(req: Request) {
   const completedAttemptsCount = await prisma.exam_attempts.count({
     where: {
       exam_id: examId,
-      student_id: session.user.id,
+      student_id: actor.studentId,
       status: { in: ['submitted', 'auto_submitted', 'force_submitted', 'graded', 'evaluated'] },
     },
   });
@@ -52,14 +51,12 @@ export async function POST(req: Request) {
     }, { status: 403 });
   }
   
-  const tenantId = session.user.tenantId || (session.user as any).tenant_id;
-
   // Create new attempt
   const attempt = await prisma.exam_attempts.create({
     data: {
-      tenant_id: tenantId,
+      tenant_id: actor.tenantId,
       exam_id: examId,
-      student_id: session.user.id,
+      student_id: actor.studentId,
       start_time: new Date(),
       status: 'in_progress',
       attempt_number: completedAttemptsCount + 1,
@@ -67,15 +64,19 @@ export async function POST(req: Request) {
   });
   
   // Log audit
-  await prisma.audit_logs.create({
-    data: {
-      tenant_id: session.user.tenantId || (session.user as any).tenant_id,
-      user_id: session.user.id,
-      action: 'EXAM_STARTED',
-      resource_type: 'exam_attempt',
-      resource_id: attempt.id,
-    },
-  });
+  try {
+    await prisma.audit_logs.create({
+      data: {
+        tenant_id: actor.tenantId,
+        user_id: actor.studentId,
+        action: 'EXAM_STARTED',
+        resource_type: 'exam_attempt',
+        resource_id: attempt.id,
+      },
+    });
+  } catch (e) {
+    console.warn('Audit log creation failed during exam start:', e);
+  }
   
   return NextResponse.json({ attemptId: attempt.id });
 }

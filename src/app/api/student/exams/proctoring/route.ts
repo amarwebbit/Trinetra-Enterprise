@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { prisma } from '@/lib/db/client';
 import { proctoringService } from '@/lib/proctoring/proctoring.service';
 import { withExamRateLimit } from '@/lib/redis/with-rate-limit';
 
 async function proctoringHandler(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const actor = await getExamActor();
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -31,7 +30,7 @@ async function proctoringHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
     }
 
-    if (attempt.student_id !== session.user.id) {
+    if (attempt.student_id !== actor.studentId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

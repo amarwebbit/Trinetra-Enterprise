@@ -36,6 +36,7 @@ export class ProctoringService {
             select: {
               full_screen_required: true,
               disable_copy_paste: true,
+              require_webcam: true,
               metadata: true,
             },
           },
@@ -47,7 +48,13 @@ export class ProctoringService {
       }
 
       const examMeta = (lockedAttempt.exams.metadata as Record<string, any>) || {};
-      const enableProctoring = lockedAttempt.exams.full_screen_required || examMeta.enable_proctoring || false;
+      const enableProctoring = Boolean(
+        lockedAttempt.exams.full_screen_required ||
+        lockedAttempt.exams.disable_copy_paste ||
+        lockedAttempt.exams.require_webcam ||
+        examMeta.enable_proctoring ||
+        false
+      );
 
       // Check if proctoring is enabled
       if (!enableProctoring) {

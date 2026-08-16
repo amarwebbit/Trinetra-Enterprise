@@ -504,6 +504,7 @@ model tenants {
   logo_url        String?
   favicon_url     String?
   banner_url      String?
+  name_image_url  String?
   primary_color   String? @default("#2563EB") @db.VarChar(7)
   secondary_color String? @default("#7C3AED") @db.VarChar(7)
   accent_color    String?

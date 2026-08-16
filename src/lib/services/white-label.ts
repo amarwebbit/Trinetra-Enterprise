@@ -10,6 +10,7 @@ export interface WhiteLabelConfig {
   tenantName: string;
   logoUrl: string | null;
   faviconUrl: string | null;
+  nameImageUrl?: string | null;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string | null;
@@ -44,6 +45,7 @@ export async function getWhiteLabelConfig(tenantId: string): Promise<WhiteLabelC
     tenantName: tenant.name,
     logoUrl: tenant.logo_url,
     faviconUrl: tenant.favicon_url,
+    nameImageUrl: tenant.name_image_url || null,
     primaryColor: tenant.primary_color || '#2563EB',
     secondaryColor: tenant.secondary_color || '#7C3AED',
     accentColor: tenant.accent_color || null,
@@ -84,6 +86,7 @@ export async function updateWhiteLabelConfig(tenantId: string, data: Partial<Whi
     logoUrl: 'logo_url',
     faviconUrl: 'favicon_url',
     bannerUrl: 'banner_url',
+    nameImageUrl: 'name_image_url',
     primaryColor: 'primary_color',
     secondaryColor: 'secondary_color',
     accentColor: 'accent_color',

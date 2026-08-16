@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2, AlertCircle, CheckCircle, Clock, ShieldCheck, Timer, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { signIn } from 'next-auth/react';
 
 export default function StudentInvitePage() {
   const { examId, token } = useParams() as { examId: string; token: string };
@@ -130,6 +131,25 @@ export default function StudentInvitePage() {
         setIsJoining(false);
         return;
       }
+
+      if (data.alreadySubmitted && data.redirectUrl) {
+        // Sign in first to ensure they have NextAuth portal session
+        await signIn('credentials', {
+          redirect: false,
+          email: rollNumber.trim(),
+          password: rollNumber.trim(),
+        });
+        toast.info('You have already submitted this exam. Redirecting...');
+        router.push(data.redirectUrl);
+        return;
+      }
+
+      // Establish a fully authenticated NextAuth session for the student
+      await signIn('credentials', {
+        redirect: false,
+        email: rollNumber.trim(),
+        password: rollNumber.trim(),
+      });
 
       // Redirect to exam — attempt already created by join API
       toast.success('Verified! Starting your exam...');

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { prisma } from '@/lib/db/client';
 import { timeService } from '@/lib/services/time.service';
 import { withExamRateLimit } from '@/lib/redis/with-rate-limit';
@@ -8,8 +7,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 
 async function saveHandler(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const actor = await getExamActor();
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -35,7 +34,7 @@ async function saveHandler(request: NextRequest) {
       select: { student_id: true, status: true, tenant_id: true },
     });
 
-    if (!attempt || attempt.student_id !== session.user.id) {
+    if (!attempt || attempt.student_id !== actor.studentId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

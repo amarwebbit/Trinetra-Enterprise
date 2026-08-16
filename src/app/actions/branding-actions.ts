@@ -40,7 +40,7 @@ export async function updateBranding(data: any) {
   const tenantId = getTenantId(session);
 
   const allowedFields = [
-    'name', 'logo_url', 'favicon_url', 'banner_url', 'primary_color',
+    'name', 'logo_url', 'favicon_url', 'banner_url', 'name_image_url', 'primary_color',
     'secondary_color', 'accent_color', 'font_family', 'email_template',
     'sms_template', 'custom_css', 'login_background', 'header_bg_color',
     'footer_text', 'remove_branding', 'custom_domain', 'app_logo_url',

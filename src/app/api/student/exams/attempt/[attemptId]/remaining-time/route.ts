@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { timeService } from '@/lib/services/time.service';
 import { prisma } from '@/lib/db/client';
 
@@ -9,8 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ attemptId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const actor = await getExamActor();
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,7 +21,7 @@ export async function GET(
       select: { student_id: true },
     });
 
-    if (!attempt || attempt.student_id !== session.user.id) {
+    if (!attempt || attempt.student_id !== actor.studentId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

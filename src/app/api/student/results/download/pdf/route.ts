@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
+import { getExamActor } from '@/lib/auth/exam-guest';
 import { prisma } from '@/lib/db/client';
 import { generateStudentResultPDF } from '@/lib/export/pdf-generator';
 
@@ -11,8 +10,8 @@ export async function GET(req: Request) {
     return Response.json({ error: 'Exam ID required' }, { status: 400 });
   }
   
-  const session = await getServerSession(authOptions);
-  if (!session || !['student', 'admin', 'super_admin'].includes(session.user.role)) {
+  const actor = await getExamActor();
+  if (!actor) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
@@ -20,7 +19,7 @@ export async function GET(req: Request) {
   const attempt = await prisma.exam_attempts.findFirst({
     where: {
       exam_id: examId,
-      student_id: session.user.id,
+      student_id: actor.studentId,
     },
     include: {
       exams: true,
@@ -34,7 +33,7 @@ export async function GET(req: Request) {
   }
   
   const tenant = await prisma.tenants.findUnique({
-    where: { id: session.user.tenantId || (session.user as any).tenant_id },
+    where: { id: actor.tenantId },
     select: { name: true, logo_url: true, primary_color: true },
   });
   

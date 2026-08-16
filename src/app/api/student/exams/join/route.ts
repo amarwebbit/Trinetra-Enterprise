@@ -96,6 +96,40 @@ async function joinHandler(req: NextRequest) {
 
     if (!attempt) {
       if (attempts.length >= (invite.exam.max_attempts || 1)) {
+        const latestAttempt = attempts[0];
+        if (latestAttempt) {
+          const showResults = Boolean(invite.exam.show_results_immediately);
+          const redirectUrl = showResults 
+            ? `/student/results/${examId}` 
+            : `/exam/complete/${latestAttempt.id}`;
+
+          const response = NextResponse.json({ 
+            success: true, 
+            alreadySubmitted: true, 
+            attemptId: latestAttempt.id, 
+            redirectUrl 
+          });
+
+          response.cookies.set(
+            EXAM_GUEST_COOKIE,
+            createExamGuestToken({
+              studentId: student.id,
+              tenantId,
+              examId,
+              attemptId: latestAttempt.id,
+            }),
+            {
+              httpOnly: true,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+              path: '/',
+              maxAge: 8 * 60 * 60,
+            }
+          );
+
+          return response;
+        }
+
         return NextResponse.json({ error: 'Maximum attempts reached for this exam' }, { status: 403 });
       }
 

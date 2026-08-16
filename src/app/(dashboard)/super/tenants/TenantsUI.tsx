@@ -201,7 +201,7 @@ export default function TenantsUI({
         toast.error(res.error || `Failed to ${currentlyActive ? 'suspend' : 'activate'} tenant.`);
       }
     } catch (error: any) {
-      toast.error('An error occurred while updating status.');
+      toast.error(error?.message || 'An error occurred while updating status.');
     }
   };
 
@@ -216,7 +216,7 @@ export default function TenantsUI({
         toast.error(res.error || 'Failed to delete tenant.');
       }
     } catch (error: any) {
-      toast.error('An error occurred while deleting tenant.');
+      toast.error(error?.message || 'An error occurred while deleting tenant.');
     }
   };
 

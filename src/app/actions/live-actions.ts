@@ -171,20 +171,29 @@ export async function adjustAttemptTime(attemptId: string, adjustmentMinutes: nu
   // Verify the attempt exists
   const attempt = await prisma.exam_attempts.findFirst({
     where: { id: attemptId },
-    include: { users: true }
+    select: { exam_id: true, tenant_id: true }
   });
 
-  if (!attempt || attempt.users?.tenant_id !== tenantId) {
+  if (!attempt || attempt.tenant_id !== tenantId) {
     throw new Error('Attempt not found or unauthorized');
   }
 
-  const currentMetadata = attempt.metadata as any || {};
+  const exam = await prisma.exams.findUnique({
+    where: { id: attempt.exam_id },
+    select: { metadata: true }
+  });
+
+  if (!exam) {
+    throw new Error('Exam not found');
+  }
+
+  const currentMetadata = (exam.metadata as Record<string, any>) || {};
   const currentAdjustmentSeconds = Number(currentMetadata.time_adjustment_seconds || 0);
   const newAdjustmentSeconds = currentAdjustmentSeconds + (adjustmentMinutes * 60);
 
-  // Update metadata
-  await prisma.exam_attempts.update({
-    where: { id: attemptId },
+  // Update exam metadata (effectively granting it to all students of this test)
+  await prisma.exams.update({
+    where: { id: attempt.exam_id },
     data: {
       metadata: {
         ...currentMetadata,
@@ -199,8 +208,8 @@ export async function adjustAttemptTime(attemptId: string, adjustmentMinutes: nu
       tenant_id: tenantId,
       user_id: session.user.id,
       action: `EXAM_TIME_ADJUSTED: ${adjustmentMinutes > 0 ? '+' : ''}${adjustmentMinutes} minutes`,
-      resource_type: 'exam_attempts',
-      resource_id: attemptId,
+      resource_type: 'exams',
+      resource_id: attempt.exam_id,
       new_values: { time_adjustment_seconds: newAdjustmentSeconds },
     }
   });
